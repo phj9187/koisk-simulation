@@ -1,0 +1,2 @@
+experiment_id,completed_day,git_commit,source_sha256,summary_path,drive_path
+EXP-20261018T122254-82add687,4,99789c225822a328d5efd587f16d547907316443,cc0769d4594352af8bded8810c238e76cd2c85ea39fe31eb8ecb5e95354445f2,results/summaries/EXP-20261018T122254-82add687/day-000004,/workspace/kiosk-github-validation/experiments/EXP-20261018T122254-82add687
