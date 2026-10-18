@@ -1,0 +1,13 @@
+seed: 20261018
+stores: 64
+source: empirical
+survey_path: /content/drive/MyDrive/AI-Kiosk-Data/raw_data/source_2025.xlsx
+visitors: null
+train_days: 40
+validation_days: 5
+evaluation_days: 10
+repetitions: 5 # null: keep running independent repetitions until safe stop
+workers: 4
+checkpoint_every: 5
+plots: true
+raw_logs: false

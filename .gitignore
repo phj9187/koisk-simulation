@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.ipynb_checkpoints/
+.env
+.env.*
+*.key
+*.pem
+credentials*.json
+token*.json
+runs/
+*.parquet
+*.checkpoint
+RUNNING.lock

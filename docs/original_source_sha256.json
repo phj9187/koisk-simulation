@@ -1,0 +1,23 @@
+{
+  "src/kiosk_sim/__init__.py": "341bdc33dcb89b5ad480c54d9c42c8fb2ef0c74b84be05f8b4f123100684836a",
+  "src/kiosk_sim/ai/__init__.py": "5eb4c374e869b3d15b6736d31e79c5357dd94c421672d288b6d8b533ef990571",
+  "src/kiosk_sim/ai/contextual.py": "7bc2fba1288a4d3cfd2dad78c7e4be28d90405326dd8fcb4c72c4fee21cfbc4b",
+  "src/kiosk_sim/ai/fixed_bayesian.py": "600ad2044c3b96b18dd6ec54e3ab5f700e5ed6e858855cd6445beeaacbd51740",
+  "src/kiosk_sim/ai/gemini.py": "0da0eecd19ddc94c1ab38011d5f074b60c5e82d498d2375e9359fc1011016917",
+  "src/kiosk_sim/ai/optimizers.py": "d61dcbd7ea6eac0b12eb5fc943e12c2b402126efb2c1fb78cf63cf015f1b3f88",
+  "src/kiosk_sim/arrival.py": "ee39f07909403f43eba3ede4612fdfdc318f087591aae1a654e51f5606422090",
+  "src/kiosk_sim/dashboard.py": "d19662d10aed7871993bce58f48f68ab885fa962a224d56e7e3724c132a7c30d",
+  "src/kiosk_sim/desktop_session.py": "820ff234c616f6afdf7ec5c44577e32f3a5c07816abad63b1503b1231fae90b3",
+  "src/kiosk_sim/durable_study.py": "bfda415154ff4730000c70d5788a2c69adb132e81315f49dcaf9eb24c0902110",
+  "src/kiosk_sim/empirical_stores.py": "78265b605deed09e52bbd8fa4460715e075fbb3674e82d23cc47306a46b0309e",
+  "src/kiosk_sim/evaluation.py": "6bc37164a53f64319477bd12a8b054ba0b958611b61a9a7880dd8fb31ba04b76",
+  "src/kiosk_sim/generators.py": "a5dfbf5101d6f3003a0bc3e922824ec3752e258c03a272e18fd486c4b588d5b5",
+  "src/kiosk_sim/lhs_study.py": "55385afe75228ec882288fd35e715a366fc2d83edfa10830c10e25a2f2a69956",
+  "src/kiosk_sim/models.py": "b88dc671f579c981acc2e703a02d6ee1bcf3def68f042c24b5b36545b6764eb5",
+  "src/kiosk_sim/public_data.py": "f0c41ea1dc5f82285bb823fa105da2ce2868f4974acc58eb944684602a6aec1b",
+  "src/kiosk_sim/recommenders.py": "d937c70a5b24d9eeaf2f8c94fbdde3ff0ff1b0962ca69843046d93afb85a8274",
+  "src/kiosk_sim/robust.py": "f26e136f53f4861f8e32907f3a37380936f04d64db7239faeee66de7b63eb325",
+  "src/kiosk_sim/simulator.py": "0f5551e0d85707dce76e43432418b7a7c5e14b0093d8689f0ecc1474294c1416",
+  "src/kiosk_sim/validation.py": "c70750922d16bdf1e587805bf512c55fc7e91f9fe5aaed83aed6b2c800d25bfa",
+  "src/kiosk_sim/visitor_distribution.py": "af55bdee130c908962208fcc5d0a2002c65edf341ed38b2a69a085d9feb8349e"
+}

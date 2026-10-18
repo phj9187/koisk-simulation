@@ -1,0 +1,19 @@
+# New research protocol, not the original LinUCB/Thompson experiment.
+seed: 20261006
+store_count: 64
+lhs_strata: 8
+source_mode: empirical_donors_2025
+survey_path: /content/drive/MyDrive/AI-Kiosk-Data/raw_data/source_2025.xlsx
+visitors_per_day: null # null: donor mean, 0 allowed; override changes empirical design
+models: [fixed, contextual]
+train_days: 40
+validation_days: 5
+evaluation_days: 10
+cycles: null # independent repetitions until safe stop; every cycle has fresh models and new seeds
+checkpoint_every: 5
+workers: 4
+detailed_logs: false
+plots: true
+search_sigma: 0.5
+# PROVISIONAL, editable common objective used by BOTH models during learning/evaluation.
+objective: {customer: 0.45, store: 0.35, served: 0.10, wait: 0.10}

@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "kiosk-cloud-research"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26,<3", "openpyxl==3.1.5", "pandas>=2.2,<3", "pyarrow>=17,<25", "matplotlib>=3.8,<4", "ipywidgets>=8,<9", "PyYAML>=6,<7", "requests>=2.32,<3"]
+[project.scripts]
+kiosk-research = "kiosk_research.cli:main"
+[tool.setuptools.packages.find]
+where = ["src"]

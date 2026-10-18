@@ -1,0 +1,13 @@
+# Synthetic functional validation, not an empirical research result.
+seed: 42
+stores: 8
+source: synthetic
+visitors: 15
+train_days: 2
+validation_days: 1
+evaluation_days: 1
+repetitions: 1
+workers: 1
+checkpoint_every: 2
+plots: true
+raw_logs: false
