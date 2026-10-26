@@ -71,3 +71,30 @@ def build():
     path.write_text(json.dumps(notebook,ensure_ascii=False,indent=1),encoding='utf-8')
 
 if __name__=='__main__':build()
+
+
+def build_automatic():
+    """A Run-all entrypoint: mount -> pilot/research or resume -> durable outputs."""
+    cells = [
+        ('markdown', '# 키오스크 연구 자동 실행\n\nGitHub 코드 → Drive 연결 → 9개 평가 기준 실험 → 체크포인트 저장·중복 정리 → 결과 저장 순서로 실행합니다. 첫 실행은 pilot으로 검증하세요.\n\nColab 런타임 종료 후에는 계산도 중단됩니다. 이 노트북은 백그라운드 무제한 실행이나 연결 유지 우회를 하지 않습니다. 다시 연결한 뒤 같은 커밋과 실험 ID로 재개하세요.'),
+        ('markdown', '## 1. GitHub 버전\n\n공개 저장소 읽기에는 토큰이 필요 없습니다. 비공개 저장소만 Colab Secrets에 `KIOSK_GITHUB_TOKEN`을 등록하세요. 재개 시 `REVISION`에 progress.json의 git_commit을 입력하세요.'),
+        ('code', BOOTSTRAP),
+        ('markdown', '## 2. Drive 연결\n\n처음 인증 요청은 직접 승인하세요. 공유 PC에서는 본인 계정인지 확인하세요.'),
+        ('code', 'from google.colab import drive\ndrive.mount("/content/drive")\nfrom pathlib import Path\nDATA_ROOT = Path("/content/drive/MyDrive/AI-Kiosk-Data")\nDATA_ROOT.mkdir(parents=True, exist_ok=True)\n'),
+        ('markdown', '## 3. 자동 실행 또는 재개\n\n`pilot`: 8매장·9기준·15방문자·학습2/검증1/평가1일·1반복. `research`: 8매장·9기준·30방문자·20/5/5일·5반복. 모두 가상 자료입니다. 실측 자료는 별도 검증된 설정이 필요합니다.\n\n`RESUME_ID`를 지정하면 원래 설정을 사용합니다. 빈 ID로 재실행하면 새 실험이 생깁니다. 중지는 별도 셀에서 STOP 파일을 만들거나 실행 중단을 누를 수 있습니다. STOP은 오늘 완료 후 안전 중지, 강제 중단은 마지막 저장된 매장 부분부터 복구합니다.\n\nRUNNING.lock이 남은 경우 이전 런타임이 종료됐음을 확인한 뒤 해당 실험의 잠금 파일만 수동 삭제하세요. 활성 런타임의 잠금을 자동으로 지우지 않습니다.'),
+        ('code', 'PRESET = "pilot" #@param ["pilot", "research"]\nRESUME_ID = "" #@param {type:"string"}\nDAY_BUDGET = 0 #@param {type:"integer"}\n# 0: 설정된 전체 일정. 양수: 지정 일수 후 안전 중지.\nfrom kiosk_research.config import Config\nfrom kiosk_research.session import run_session\nconfig = Config.load(CODE_ROOT / "config" / ("screening_"+PRESET+".yaml"))\nrun = run_session(DATA_ROOT, config=config, resume_id=RESUME_ID.strip() or None, day_budget=DAY_BUDGET or None)\n'),
+        ('markdown', '## 4. 진행 상황·저장 결과\n\n이 셀은 실행 완료 후 자동으로 표시됩니다. 실행 중에는 Drive의 latest_run.json 또는 experiments/실험ID/progress.json에서 마지막 갱신 시각·완료 날짜·체크포인트·완료 매장 수를 확인하세요. 파일의 running 표시가 오래됐다면 현재 런타임이 살아 있다는 보장은 아닙니다.'),
+        ('code', 'import json\nfrom kiosk_research.session import status\nprint(json.dumps(status(DATA_ROOT), ensure_ascii=False, indent=2))\nfrom kiosk_research.persistence import read_json\nprint(read_json(run.directory / "session_result.json"))\n'),
+        ('markdown', '## 5. 선택: GitHub 요약 업로드\n\n아래 설정을 true로 바꾼 경우에만 Colab Secrets의 쓰기 권한 토큰을 사용합니다. 원시 자료·체크포인트는 Drive에 남고 작은 요약만 새로운 results 브랜치에 올라갑니다. 이미 같은 요약을 올렸으면 저장된 업로드 기록을 보여줍니다.'),
+        ('code', 'UPLOAD_SUMMARY = False #@param {type:"boolean"}\nif UPLOAD_SUMMARY:\n    from google.colab import userdata\n    from kiosk_research.github import upload_summary\n    summary = Path(read_json(run.directory / "session_result.json")["summary"])\n    if (summary / "github_upload.json").exists():\n        print(read_json(summary / "github_upload.json"))\n    else:\n        print(upload_summary(summary, REPOSITORY, userdata.get("KIOSK_GITHUB_TOKEN")))\n'),
+    ]
+    result=[]
+    for kind,text in cells:
+        cell={'cell_type':kind,'metadata':{},'source':text.splitlines(keepends=True)}
+        if kind=='code':cell.update(execution_count=None,outputs=[])
+        result.append(cell)
+    notebook={'cells':result,'metadata':{'colab':{'name':'Kiosk_Automatic_Research.ipynb'},'kernelspec':{'display_name':'Python 3','name':'python3'},'language_info':{'name':'python'}},'nbformat':4,'nbformat_minor':5}
+    path=Path(__file__).resolve().parents[1]/'notebooks'/'run_automatic.ipynb'
+    path.write_text(json.dumps(notebook,ensure_ascii=False,indent=1),encoding='utf-8')
+
+if __name__=='__main__':build_automatic()

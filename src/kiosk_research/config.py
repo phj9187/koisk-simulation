@@ -2,6 +2,7 @@ from dataclasses import asdict, dataclass, field
 import math
 from pathlib import Path
 import yaml
+from kiosk_research.design import screening_design,interior_validation_design
 
 SCENARIOS = {
     'balanced': {'customer': [.45, .25, .30], 'store': [.75, .25]},
@@ -23,7 +24,7 @@ class Config:
     train_lambdas: int = 3
     validation_lambdas: list = field(default_factory=lambda: [0., .25, .5, .75, 1.])
     evaluation_lambdas: list = field(default_factory=lambda: [i/8 for i in range(9)])
-    scenarios: dict = field(default_factory=lambda: {k:{n:list(v) for n,v in s.items()} for k,s in SCENARIOS.items()})
+    scenarios: dict = field(default_factory=screening_design)
     models: list = field(default_factory=lambda: ['fixed', 'contextual'])
     sigma: float = .5
     checkpoint_every: int = 2
@@ -31,11 +32,15 @@ class Config:
     raw_logs: bool = False
     plots: bool = True
     wait_scale: float = 25.
+    checkpoint_keep: int = 2
+    auto_cleanup: bool = True
+    cross_evaluation: dict = field(default_factory=interior_validation_design)
 
     def validate(self, require_source=True):
-        for key in ('stores','train_days','validation_days','evaluation_days','checkpoint_every','workers','train_lambdas'):
+        for key in ('stores','train_days','validation_days','evaluation_days','checkpoint_every','workers','train_lambdas','checkpoint_keep'):
             if type(getattr(self,key)) is not int or getattr(self,key)<1:
                 raise ValueError(f'{key} must be a positive integer')
+        if self.checkpoint_keep<2: raise ValueError('at least two recovery checkpoints required')
         if self.workers>4 or self.train_lambdas<2: raise ValueError('workers <= 4; train_lambdas >= 2')
         if type(self.seed) is not int or self.seed<0: raise ValueError('invalid seed')
         for key in ('visitors','repetitions'):
@@ -43,7 +48,7 @@ class Config:
             if v is not None and (type(v) is not int or v<(0 if key=='visitors' else 1)): raise ValueError(f'invalid {key}')
         for key in ('sigma','wait_scale'):
             if not math.isfinite(getattr(self,key)) or getattr(self,key)<=0: raise ValueError(f'invalid {key}')
-        for key in ('raw_logs','plots'):
+        for key in ('raw_logs','plots','auto_cleanup'):
             if type(getattr(self,key)) is not bool: raise ValueError(f'{key} must be boolean')
         if self.source not in ('synthetic','empirical'): raise ValueError('unknown source')
         if self.source=='synthetic' and self.stores%8: raise ValueError('synthetic stores must be a multiple of 8')
@@ -54,7 +59,8 @@ class Config:
             if not grid or len(set(grid))!=len(grid) or any(not math.isfinite(x) or not 0<=x<=1 for x in grid): raise ValueError('invalid lambda grid')
         if not set(self.validation_lambdas)<=set(self.evaluation_lambdas): raise ValueError('final grid must include validation grid for checking selected policies')
         if not self.scenarios: raise ValueError('at least one scenario required')
-        for name,s in self.scenarios.items():
+        if set(self.cross_evaluation)&set(self.scenarios): raise ValueError("cross-evaluation names must be distinct")
+        for name,s in {**self.scenarios,**self.cross_evaluation}.items():
             if not name or not name.replace('_','').isalnum() or set(s)!={'customer','store'}: raise ValueError('invalid scenario')
             for key,n in (('customer',3),('store',2)):
                 values=s[key]

@@ -16,7 +16,7 @@ def store_day(task):
     config,case,previous,day=task;rep,phase,offset=config.stage(day)
     template=restore_store(case['template']);store=copy.deepcopy(template)
     rng=random.Random(seed_for(config.seed,'stock',day,case['id']))
-    store.stock={k:max(1,round(v*rng.uniform(.65,1.10))) for k,v in template.stock.items()};store.cook_free_at=[0.]*store.cooks
+    store.stock={k:max(0,round(v*rng.uniform(.65,1.10))) for k,v in template.stock.items()};store.cook_free_at=[0.]*store.cooks
     visitors=config.visitors if config.visitors is not None else round(float(case['features']['visitor_mean']))
     people=customers(visitors,random.Random(seed_for(config.seed,'customers',day,case['id'])),template) if visitors else []
     event_seed=seed_for(config.seed,'events',day,case['id'])

@@ -30,6 +30,12 @@ def load_checkpoint(path):
     if hashlib.sha256(encoded(value['state'])).hexdigest()!=value['sha256']:raise ValueError('checkpoint checksum mismatch')
     return value['state']
 
+def unique_records(frame,keys):
+    """Collapse exact duplicate records; refuse conflicting logical keys."""
+    result=frame.drop_duplicates().copy()
+    if result.duplicated(keys).any():raise ValueError("conflicting duplicate result keys")
+    return result
+
 def parquet(path,rows):
     with tempfile.TemporaryDirectory() as directory:
         out=Path(directory)/'data.parquet'

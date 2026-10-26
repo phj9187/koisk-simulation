@@ -24,6 +24,81 @@ def small(**changes):
 def deterministic(frame):return frame.drop(columns=['elapsed_seconds']).sort_values(['day','store_id','scenario','model','lambda_value']).reset_index(drop=True)
 
 class ResearchTests(unittest.TestCase):
+    def test_store_frontier_analysis_does_not_force_shared_lambda(self):
+        # Two stores need opposite lambdas. Averaging outcomes before computing
+        # HV answers a different question than averaging store-specific HVs.
+        rows=[]
+        for store in (0,1):
+            for lam in (0.,1.):
+                for model in ('fixed','contextual'):
+                    value=.8 if model=='contextual' and lam==store else .2
+                    rows.append(dict(repetition=1,scenario='a',store_id=store,lambda_value=lam,model=model,customer=value,store=value))
+        points=pd.DataFrame(rows)
+        local=compare(points,42,per_store=True)[0]
+        pooled=compare(points.groupby(['repetition','scenario','model','lambda_value'],as_index=False)[['customer','store']].mean(),42)[0]
+        self.assertAlmostEqual(local['mean_hypervolume_contextual_minus_fixed'],.60)
+        self.assertAlmostEqual(pooled['mean_hypervolume_contextual_minus_fixed'],.21)
+
+    def test_evaluation_is_independent_monotone_and_reweightable(self):
+        from kiosk_research.evaluation import score_outcomes,CUSTOMER_METRICS,STORE_METRICS
+        components=dict.fromkeys(CUSTOMER_METRICS+STORE_METRICS,.4)
+        scenario=small().scenarios['balanced']
+        base=score_outcomes(components,scenario,.5)
+        for key in components:
+            improved=score_outcomes({**components,key:.8},scenario,.5)
+            self.assertGreater(improved['reward'],base['reward'])
+        self.assertEqual(score_outcomes(components,scenario,1.)['reward'],base['customer'])
+        self.assertEqual(score_outcomes(components,scenario,0.)['reward'],base['store'])
+        with self.assertRaises(ValueError):score_outcomes({**components,'margin_component':float('nan')},scenario,.5)
+
+    def test_no_risk_has_no_artificial_inventory_reward(self):
+        from dataclasses import replace
+        from kiosk_sim.models import Customer,Menu,Store
+        person=Customer((.5,.5,.5),.7,.6,None,1.,20.)
+        menu=Menu('one',(.5,.5,.5),10.,5.,3.,'item',1,None,0.)
+        scenario=small().scenarios['balanced']
+        store=Store([menu],{'item':2},1)
+        out=simulate([person],store,Policy.initial('fixed'),.5,scenario,1)
+        self.assertEqual(out['waste_reduction_component'],0.)
+        self.assertFalse(out['risk_reduction_applicable'])
+        store.menus=[replace(menu,expiry_risk=.5)]
+        out=simulate([person],store,Policy.initial('fixed'),.5,scenario,1)
+        self.assertAlmostEqual(out['waste_reduction_component'],.5)
+        store.stock={'item':0}
+        out=simulate([person],store,Policy.initial('fixed'),.5,scenario,1)
+        self.assertEqual(out['customer'],0.);self.assertEqual(out['served'],0)
+
+    def test_recommendation_features_have_stable_scales_and_price_signal(self):
+        from dataclasses import replace
+        from kiosk_sim.models import Customer,Menu,Store
+        from kiosk_research.policy import recommendation_features,COMPONENTS
+        from kiosk_research.evaluation import ingredient_risks
+        person=Customer((.5,.5,.5),.7,.6,None,1.,20.)
+        menu=Menu('one',(.5,.5,.5),10.,5.,3.,'item',1,None,.5)
+        cheap=replace(menu,name='cheap',price=5.,cost=0.)
+        store=Store([menu,cheap],{'item':2},1)
+        def features(m,now=0):return recommendation_features(person,store,m,0.,now,25.,ingredient_risks(store),.5,5.,1.)
+        a,b=features(menu),features(cheap)
+        self.assertEqual(len(a),len(COMPONENTS))
+        self.assertTrue(all(0<=v<=1 for v in a+b))
+        self.assertEqual(a[:4],b[:4]);self.assertGreater(b[4],a[4])
+        self.assertLess(features(menu,100.)[3],a[3])
+        # Policy cannot see or modify evaluator coefficients.
+        before=simulate([person],store,Policy.initial('fixed'),.5,small().scenarios['balanced'],1,raw=True)
+        after=simulate([person],store,Policy.initial('fixed'),.5,{'customer':[0.,1.,0.],'store':[0.,1.]},1,raw=True)
+        self.assertEqual(before['logs'],after['logs'])
+
+    def test_validation_guard_and_configuration_snapshot(self):
+        points=pd.DataFrame([{'model':'fixed','lambda_value':.5,'customer':.6,'store':.7,'phase':'evaluation'}])
+        with self.assertRaises(ValueError):recommend(points,min_customer=.5)
+        points=points.drop(columns='phase')
+        mixed=pd.concat([points.assign(scenario='a'),points.assign(scenario='b')])
+        with self.assertRaises(ValueError):recommend(mixed,min_customer=.5)
+        with tempfile.TemporaryDirectory() as root:
+            config=small();run=Experiment(config,root)
+            config.scenarios['balanced']['customer'][0]=1.
+            self.assertEqual(run.config.scenarios['balanced']['customer'][0],.45)
+
     def test_bad_configuration(self):
         for values in ({'visitors':-1},{'workers':5},{'models':['fixed','fixed']},{'sigma':float('nan')},{'evaluation_lambdas':[0.,2.]},{'scenarios':{'bad':{'customer':[1,1,1],'store':[.5,.5]}}}):
             with self.subTest(values=values),self.assertRaises(ValueError):small(**values).validate()

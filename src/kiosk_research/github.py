@@ -12,7 +12,7 @@ import re
 import requests
 from kiosk_cloud.storage import json_write
 
-ALLOWED = {'metadata.json','summary.csv','statistics.json','comparison.png','learning_weights.png','report.md','store_frontiers.csv','validation.csv','store_effects.csv','function_curves.csv','complete.json'}
+ALLOWED = {'cross_evaluation.csv','robustness.csv','metadata.json','summary.csv','statistics.json','comparison.png','learning_weights.png','report.md','store_frontiers.csv','validation.csv','store_effects.csv','function_curves.csv','complete.json'}
 
 
 class GitHubError(RuntimeError): pass

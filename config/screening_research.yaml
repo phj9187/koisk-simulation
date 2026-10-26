@@ -1,0 +1,135 @@
+seed: 42
+stores: 8
+source: synthetic
+survey_path: ''
+visitors: 30
+train_days: 20
+validation_days: 5
+evaluation_days: 5
+repetitions: 5
+train_lambdas: 3
+validation_lambdas:
+- 0.0
+- 0.25
+- 0.5
+- 0.75
+- 1.0
+evaluation_lambdas:
+- 0.0
+- 0.125
+- 0.25
+- 0.375
+- 0.5
+- 0.625
+- 0.75
+- 0.875
+- 1.0
+scenarios:
+  customer_uniform:
+    customer:
+    - 0.3333333333333333
+    - 0.3333333333333333
+    - 0.3333333333333333
+    store:
+    - 0.5
+    - 0.5
+  customer_taste:
+    customer:
+    - 1.0
+    - 0.0
+    - 0.0
+    store:
+    - 0.5
+    - 0.5
+  customer_price:
+    customer:
+    - 0.0
+    - 1.0
+    - 0.0
+    store:
+    - 0.5
+    - 0.5
+  customer_wait:
+    customer:
+    - 0.0
+    - 0.0
+    - 1.0
+    store:
+    - 0.5
+    - 0.5
+  customer_taste_price:
+    customer:
+    - 0.5
+    - 0.5
+    - 0.0
+    store:
+    - 0.5
+    - 0.5
+  customer_taste_wait:
+    customer:
+    - 0.5
+    - 0.0
+    - 0.5
+    store:
+    - 0.5
+    - 0.5
+  customer_price_wait:
+    customer:
+    - 0.0
+    - 0.5
+    - 0.5
+    store:
+    - 0.5
+    - 0.5
+  store_profit:
+    customer:
+    - 0.3333333333333333
+    - 0.3333333333333333
+    - 0.3333333333333333
+    store:
+    - 1.0
+    - 0.0
+  store_inventory:
+    customer:
+    - 0.3333333333333333
+    - 0.3333333333333333
+    - 0.3333333333333333
+    store:
+    - 0.0
+    - 1.0
+models:
+- fixed
+- contextual
+sigma: 0.5
+checkpoint_every: 2
+workers: 1
+raw_logs: false
+plots: true
+wait_scale: 25.0
+checkpoint_keep: 2
+auto_cleanup: true
+cross_evaluation:
+  interior_balanced:
+    customer:
+    - 0.4
+    - 0.3
+    - 0.3
+    store:
+    - 0.6
+    - 0.4
+  interior_price:
+    customer:
+    - 0.2
+    - 0.6
+    - 0.2
+    store:
+    - 0.3
+    - 0.7
+  interior_wait:
+    customer:
+    - 0.2
+    - 0.2
+    - 0.6
+    store:
+    - 0.7
+    - 0.3

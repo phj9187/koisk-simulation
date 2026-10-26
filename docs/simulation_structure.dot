@@ -1,0 +1,68 @@
+digraph KioskResearch {
+  graph [rankdir=TB, bgcolor="#f8fafc", pad="0.30", nodesep="0.35", ranksep="0.45", fontname="Noto Sans CJK KR", fontsize=22, label="키오스크 추천 연구 — 구상과 현재 실행 구조\nλ 조건부 추천 함수 · 공통 학습 목적 · 분리된 최종 평가", labelloc=t, compound=true];
+  node [shape=box, style="rounded,filled", fillcolor=white, color="#cbd5e1", fontname="Noto Sans CJK KR", fontsize=12, margin="0.18,0.12"];
+  edge [color="#64748b", arrowsize=.7, fontname="Noto Sans CJK KR", fontsize=10];
+
+  subgraph cluster_inputs {
+    label="① 실험 입력과 평가 가정"; color="#bfdbfe"; style=rounded;
+    stores [label="매장 표본\nKREI 경험 표본 / 가상 검증 매장", fillcolor="#eff6ff"];
+    scenario [label="만족도 구성 계수 α·β\n맛·가격·대기 / 이익·재고 감소\n시나리오별 고정 가정", fillcolor="#fff7ed"];
+    lambda [label="고객·가게 선호 λ\n학습: 끝점 + 내부 표본\n검증·평가: 정해진 격자", fillcolor="#f5f3ff"];
+    external [label="매장 하루의 외생 조건\n같은 고객·도착·초기 재고·선택 충격", fillcolor="#eff6ff"];
+    stores -> external;
+  }
+
+  subgraph cluster_models {
+    label="② 매장·만족도 시나리오별 독립 정책"; color="#ddd6fe"; style=rounded;
+    fixed [label="고정 모델\nw = f(λ)\n같은 λ에서는 고객·상황과 무관", fillcolor="#ede9fe"];
+    contextual [label="상황별 모델\nw = g(고객·재고·대기, λ)\n현재 상황에 따라 가중치 변화", fillcolor="#ede9fe"];
+    weights [label="학습된 추천 가중치 w\n적합도 · 재고 위험 · 마진 · 대기 · 가격 부담", fillcolor="#f5f3ff"];
+    fixed -> weights; contextual -> weights;
+  }
+  lambda -> fixed; lambda -> contextual;
+  external -> contextual [label="상황 입력"];
+
+  subgraph cluster_day {
+    label="③ 하루 시뮬레이션 — 각 정책·λ마다 독립 매장 상태"; color="#bbf7d0"; style=rounded;
+    feasible [label="도착 순 고객 처리\n재고·예산·알레르기 제약 검사", fillcolor="#f0fdf4"];
+    choice [label="추천 메뉴와 고객의 자체 선택\n추천 수락 → 주문 결정", fillcolor="#f0fdf4"];
+    dynamics [label="키오스크·조리 대기\n재고 소진·이익·고객 경험 갱신", fillcolor="#f0fdf4"];
+    metrics [label="하루 원시 성과 → Cα, Sβ\n미응대 포함 · 정규화 방식 고정", fillcolor="#dcfce7"];
+    feasible -> choice -> dynamics -> metrics;
+  }
+  external -> feasible;
+  weights -> choice;
+  scenario -> metrics;
+
+  subgraph cluster_protocol {
+    label="④ 독립 반복: 학습 → 동결 검증 → 동결 평가"; color="#a5f3fc"; style=rounded;
+    training [label="학습 날짜\n기존 함수와 교란 후보를 같은 조건에서 비교\n평균 Rλ = λCα + (1−λ)Sβ 개선 시 채택", fillcolor="#ecfeff"];
+    validation [label="검증 날짜: 파라미터 갱신 없음\n운영 제약이 있으면 정책·λ 선택", fillcolor="#ecfeff"];
+    evaluation [label="최종 평가 날짜: 파라미터 갱신 없음\n초기 균등 정책과도 비교", fillcolor="#cffafe"];
+    reset [label="다음 반복은 초기 모델에서 다시 시작\n매장 표본 고정 · 새 외생 날짜", fillcolor="#f1f5f9"];
+    training -> validation -> evaluation -> reset;
+    reset -> training [style=dashed, label="반복"];
+  }
+  metrics -> training [label="학습용 결과만 갱신에 사용"];
+  lambda -> training [label="λ 묶음"];
+
+  subgraph cluster_results {
+    label="⑤ 성과와 해석"; color="#fde68a"; style=rounded;
+    pareto [label="모델별 고객·가게 성과 쌍\n근사 파레토 후보·하이퍼볼륨", fillcolor="#fffbeb"];
+    compare [label="독립 반복 차이·연산 비용 비교\n매장 특성의 탐색적 연관 분석", fillcolor="#fffbeb"];
+    recommend [label="운영 목표가 있을 때만 λ 추천\n검증에서 선택 → 최종 평가로 확인", fillcolor="#fffbeb"];
+    pareto -> compare;
+  }
+  evaluation -> pareto;
+  validation -> recommend;
+  evaluation -> recommend [label="선택 정책 별도 확인"];
+
+  storage [label="저장·중지·복구\n매장 부분 상태 + 일별 Parquet + JSON 체크포인트\n하루 경계 중지 · 체크섬 검증 · 동일 버전 재개", fillcolor="#e2e8f0"];
+  dynamics -> storage [style=dashed];
+  evaluation -> storage [style=dashed];
+  archive [label="서비스 역할\nCodex: 개발·검증 | GitHub: 코드·작은 요약\nColab: 연구 연산 | Drive: 데이터·모델·체크포인트", fillcolor="#e2e8f0"];
+  storage -> archive;compare -> archive;
+
+  future [label="추후 연구 — 현재 구현과 구분\n매장 특성 z까지 입력받는 통합 함수 F(z,x,λ)\n각 λ별 독립 최적화 기준선 · 적응적 표본 · 인과 개입 실험", style="rounded,dashed,filled", fillcolor="#f1f5f9", color="#94a3b8"];
+  compare -> future [style=dashed];
+}

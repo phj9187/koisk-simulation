@@ -3,7 +3,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import json
 import traceback
-from kiosk_research.config import Config,SCENARIOS
+from kiosk_research.config import Config
+from kiosk_research.design import screening_design
+SCENARIOS=screening_design()
 from kiosk_research.engine import Experiment
 from kiosk_research.analysis import export,recommend
 from kiosk_research.persistence import write_json
@@ -27,6 +29,8 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
     repetitions=w.BoundedIntText(value=1,min=0,max=100000,description='반복 (0=계속)')
     workers=w.BoundedIntText(value=1,min=1,max=4,description='CPU 작업자')
     interval=w.BoundedIntText(value=2,min=1,max=1000,description='저장 주기')
+    keep=w.BoundedIntText(value=2,min=2,max=20,description='복구 보관 수')
+    cleanup=w.Checkbox(value=True,description='검증된 중복 자료 자동 정리')
     models=w.SelectMultiple(options=['fixed','contextual'],value=('fixed','contextual'),description='비교 모델')
     scenarios=w.SelectMultiple(options=list(SCENARIOS),value=tuple(SCENARIOS),description='만족도 가정')
     coefficients=w.Textarea(value=json.dumps(SCENARIOS,indent=2),description='가정 계수 JSON',layout=w.Layout(width='95%',height='170px'))
@@ -37,7 +41,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
     constraint=w.BoundedFloatText(value=.5,min=0,max=1,step=.05,description='최소 고객 만족도');select=w.Button(description='검증 자료로 λ 추천')
     status=w.HTML('대기 중. 기본 설정은 소규모 가상 검증용입니다.');out=w.Output();pool=ThreadPoolExecutor(max_workers=1)
     state={'experiment':None,'future':None,'summary':None}
-    fields=[source,survey,stores,override,visitors,seed,train,validation,evaluation,repetitions,workers,interval,models,scenarios,coefficients,logs,plots,existing]
+    fields=[source,survey,stores,override,visitors,seed,train,validation,evaluation,repetitions,workers,interval,keep,cleanup,models,scenarios,coefficients,logs,plots,existing]
     def busy():return state['future'] is not None and not state['future'].done()
     def launch(resuming):
         if busy():return
@@ -51,7 +55,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
                 c=Config(seed=seed.value,stores=stores.value,source=source.value,survey_path=survey.value,
                          visitors=visitors.value if override.value else None,train_days=train.value,validation_days=validation.value,
                          evaluation_days=evaluation.value,repetitions=repetitions.value or None,workers=workers.value,
-                         checkpoint_every=interval.value,models=list(models.value),scenarios={k:all_scenarios[k] for k in scenarios.value},raw_logs=logs.value,plots=plots.value)
+                         checkpoint_every=interval.value,checkpoint_keep=keep.value,auto_cleanup=cleanup.value,models=list(models.value),scenarios={k:all_scenarios[k] for k in scenarios.value},raw_logs=logs.value,plots=plots.value)
                 run=Experiment(c,data_root)
             state.update(experiment=run,summary=None);existing.value=run.id
             for field in fields:field.disabled=True
@@ -60,7 +64,8 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
                 try:
                     run.run(progress=lambda day,done,total:setattr(status,'value',f'{run.id} · {day}일 · 저장 매장 {done}/{total}'),
                             day_callback=lambda r:setattr(status,'value',f"{r.id} · {r.state['day']}일 완료 · {r.config.stage(r.state['day'])[1]}"))
-                    status.value=f"{run.id} · {run.state['day']}일 · {run.state['stop_reason']}"
+                    state['summary']=export(run)
+                    status.value=f"{run.id} · {run.state['day']}일 · {run.state['stop_reason']} · 결과 저장 완료"
                 except Exception:
                     status.value='오류 발생. 저장된 날짜/매장 부분 진행에서 재개하세요.'
                     with out:traceback.print_exc()
@@ -122,6 +127,6 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
             except Exception:traceback.print_exc()
     start.on_click(lambda _:launch(False));resume.on_click(lambda _:launch(True));stop.on_click(halt);results.on_click(show);upload.on_click(publish);select.on_click(choose)
     display(w.VBox([w.HTML('<h3>λ 조건부 추천 함수 · 파레토 연구</h3><p>학습 → 동결 검증 → 동결 평가. 반복마다 새 모델로 시작합니다. CPU 실행부터 확인하세요.</p>'),source,survey,
-                    w.HBox([stores,workers]),override,visitors,seed,models,scenarios,coefficients,w.HBox([train,validation,evaluation]),repetitions,interval,
+                    w.HBox([stores,workers]),override,visitors,seed,models,scenarios,coefficients,w.HBox([train,validation,evaluation]),repetitions,interval,keep,cleanup,
                     w.HBox([logs,plots]),existing,w.HBox([start,resume,stop]),w.HBox([results,upload]),w.HBox([constraint,select]),status,out]))
     return state
