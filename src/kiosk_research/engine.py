@@ -136,7 +136,7 @@ class Experiment:
     def request_stop(self):atomic_bytes(self.directory/'STOP',b'stop after complete date\n')
     def records(self):return pd.concat([pd.read_parquet(self.directory/p['path']) for p in self.state['parts']],ignore_index=True) if self.state['parts'] else pd.DataFrame()
 
-    def _next_day(self,progress=None):
+    def _next_day(self,progress=None,should_stop=None):
         day=self.state['day']+1
         self._progress(active_day=day,done=0)
         folder=self.checkpoints/f'partial_{day:06d}';folder.mkdir(exist_ok=True)
@@ -153,7 +153,9 @@ class Experiment:
             self._progress(active_day=day,done=len(done))
             if progress:progress(day,len(done),len(self.state['cases']))
         if self.config.workers==1:
-            for task in tasks:commit(store_day(task))
+            for task in tasks:
+                if should_stop and should_stop():return False
+                commit(store_day(task))
         elif tasks:
             with ProcessPoolExecutor(max_workers=self.config.workers,mp_context=multiprocessing.get_context('spawn')) as pool:
                 futures=[pool.submit(store_day,t) for t in tasks]
@@ -176,8 +178,15 @@ class Experiment:
             if result['converged']:self.state['stop_reason']='converged'
         if (self.directory/'STOP').exists():self.state['stop_reason']='paused'
         elif self.config.complete(day):self.state['stop_reason']='completed'
+        return True
 
-    def run(self,day_budget=None,progress=None,day_callback=None,target_day=None):
+    def run(self,day_budget=None,progress=None,day_callback=None,target_day=None,deadline_utc=None):
+        deadline=None
+        if deadline_utc is not None:
+            deadline=datetime.fromisoformat(deadline_utc.replace('Z','+00:00'))
+            if deadline.tzinfo is None:raise ValueError('deadline requires timezone')
+            if self.config.workers!=1:raise ValueError('deadline mode requires one worker for safe store-boundary stop')
+        def expired():return deadline is not None and datetime.now(timezone.utc)>=deadline
         if day_budget is not None and (type(day_budget) is not int or day_budget<1):raise ValueError('invalid day budget')
         if target_day is not None and (type(target_day) is not int or target_day<1):raise ValueError('invalid absolute target day')
         with exclusive_lock(self.directory/'RUNNING.lock'):
@@ -185,12 +194,17 @@ class Experiment:
             if self.state['stop_reason'] in ('completed','converged'):return
             if target_day is not None and self.state['day']>=target_day:
                 self.state['stop_reason']='target_reached';self._save();self._frontier=self._signature();return
-            if self.state['stop_reason'] in ('paused','target_reached'):
+            if self.state['stop_reason'] in ('paused','target_reached','deadline_reached'):
                 (self.directory/'STOP').unlink(missing_ok=True);self.state['stop_reason']=''
             count=0
             try:
                 while not self.state['stop_reason']:
-                    self._next_day(progress);count+=1
+                    if expired():
+                        self.state['stop_reason']='deadline_reached';self._save();break
+                    finished=self._next_day(progress,expired if deadline else None)
+                    if finished is False:
+                        self.state['stop_reason']='deadline_reached';self._save();break
+                    count+=1
                     if target_day is not None and self.state['day']>=target_day:self.state['stop_reason']='target_reached'
                     if day_budget and count>=day_budget and not self.state['stop_reason']:self.state['stop_reason']='paused'
                     _,_,offset=self.config.stage(self.state['day'])
