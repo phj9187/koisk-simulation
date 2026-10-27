@@ -1,0 +1,72 @@
+seed: 42
+stores: 8
+source: synthetic
+survey_path: ''
+visitors: 5
+train_days: 2
+validation_days: 1
+evaluation_days: 1
+repetitions: 1
+train_lambdas: 3
+validation_lambdas:
+- 0.0
+- 0.25
+- 0.5
+- 0.75
+- 1.0
+evaluation_lambdas:
+- 0.0
+- 0.125
+- 0.25
+- 0.375
+- 0.5
+- 0.625
+- 0.75
+- 0.875
+- 1.0
+scenarios:
+  balanced:
+    customer:
+    - 0.45
+    - 0.25
+    - 0.3
+    store:
+    - 0.75
+    - 0.25
+models:
+- fixed
+- contextual
+sigma: 0.5
+checkpoint_every: 1
+workers: 1
+raw_logs: false
+plots: true
+wait_scale: 25.0
+checkpoint_keep: 2
+auto_cleanup: false
+cross_evaluation:
+  interior_balanced:
+    customer:
+    - 0.4
+    - 0.3
+    - 0.3
+    store:
+    - 0.6
+    - 0.4
+  interior_price:
+    customer:
+    - 0.2
+    - 0.6
+    - 0.2
+    store:
+    - 0.3
+    - 0.7
+  interior_wait:
+    customer:
+    - 0.2
+    - 0.2
+    - 0.6
+    store:
+    - 0.7
+    - 0.3
+algorithm: actor_critic

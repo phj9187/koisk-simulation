@@ -222,5 +222,9 @@ Synthetic outcomes, not measured human satisfaction.
         text=text.replace(f'Completed independent repetitions: {len(completed)}',f'Completed dependent learning cycles: {len(completed)}')
         text=text.replace('Each repetition restarts models.','Models carry forward across cycles; models do not restart.')
         text=text.replace('Fewer than five repetitions: descriptive differences only; otherwise repetition-level paired bootstrap.','Dependent cycles: descriptive differences only; no independent-repetition confidence interval.')
+    if experiment.config.algorithm=='actor_critic':
+        text=text.replace('Model dimensions: fixed=15, contextual=135.','Model dimensions: both variants have Actor=773 and Critic=705 neural parameters (1,478 total).')
+        text=text.replace('Initial uniform policies are evaluated','Initial uniform-mean neural policies are evaluated')
+        text += '\nActor-Critic: contextual TD(0) customer updates; fixed daily batch updates. Gamma=1 within a finite day. Validation and evaluation use frozen mean policies. Training rows contain on-policy outcomes; use held-out dates for model comparison. Adam and private RNG states are checkpointed.\n'
     atomic_bytes(target/'report.md',text.encode('utf-8'));write_json(target/'complete.json',completion)
     return target

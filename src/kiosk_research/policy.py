@@ -37,6 +37,9 @@ class Policy:
 
     @classmethod
     def restore(cls,state):
+        if state.get('algorithm')=='actor_critic':
+            from kiosk_research.actor_critic import ActorCriticPolicy
+            return ActorCriticPolicy.restore(state)
         policy=cls(state['kind'],state['theta']);expected=cls.initial(policy.kind)
         if len(policy.theta)!=len(COMPONENTS) or any(len(a)!=len(b) or any(not math.isfinite(v) for v in a) for a,b in zip(policy.theta,expected.theta)):raise ValueError('invalid policy state')
         return policy

@@ -12,6 +12,7 @@ SCENARIOS = {
 
 @dataclass
 class Config:
+    algorithm: str = 'random_search'
     seed: int = 42
     stores: int = 8
     source: str = 'synthetic'
@@ -42,6 +43,7 @@ class Config:
     convergence_probe_every: int = 5
 
     def validate(self, require_source=True):
+        if self.algorithm not in ('random_search','actor_critic'):raise ValueError('unknown algorithm')
         for key in ('stores','train_days','validation_days','evaluation_days','checkpoint_every','workers','train_lambdas','checkpoint_keep'):
             if type(getattr(self,key)) is not int or getattr(self,key)<1:
                 raise ValueError(f'{key} must be a positive integer')

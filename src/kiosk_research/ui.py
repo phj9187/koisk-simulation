@@ -13,6 +13,7 @@ from kiosk_research.persistence import write_json
 def controls(data_root,repository='phj9187/koisk-simulation'):
     import ipywidgets as w
     from IPython.display import display,Image
+    algorithm=w.Dropdown(options=[('신경망 Actor–Critic','actor_critic'),('기존 무작위 탐색','random_search')],value='actor_critic',description='학습 방식')
     try:
         from google.colab import output
         output.enable_custom_widget_manager()
@@ -30,7 +31,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
     workers=w.BoundedIntText(value=1,min=1,max=4,description='CPU 작업자')
     interval=w.BoundedIntText(value=2,min=1,max=1000,description='저장 주기')
     keep=w.BoundedIntText(value=2,min=2,max=20,description='복구 보관 수')
-    cleanup=w.Checkbox(value=True,description='검증된 중복 자료 자동 정리')
+    cleanup=w.Checkbox(value=False,description='검증된 중복 자료 자동 정리')
     models=w.SelectMultiple(options=['fixed','contextual'],value=('fixed','contextual'),description='비교 모델')
     scenarios=w.SelectMultiple(options=list(SCENARIOS),value=tuple(SCENARIOS),description='만족도 가정')
     coefficients=w.Textarea(value=json.dumps(SCENARIOS,indent=2),description='가정 계수 JSON',layout=w.Layout(width='95%',height='170px'))
@@ -41,7 +42,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
     constraint=w.BoundedFloatText(value=.5,min=0,max=1,step=.05,description='최소 고객 만족도');select=w.Button(description='검증 자료로 λ 추천')
     status=w.HTML('대기 중. 기본 설정은 소규모 가상 검증용입니다.');out=w.Output();pool=ThreadPoolExecutor(max_workers=1)
     state={'experiment':None,'future':None,'summary':None}
-    fields=[source,survey,stores,override,visitors,seed,train,validation,evaluation,repetitions,workers,interval,keep,cleanup,models,scenarios,coefficients,logs,plots,existing]
+    fields=[algorithm,source,survey,stores,override,visitors,seed,train,validation,evaluation,repetitions,workers,interval,keep,cleanup,models,scenarios,coefficients,logs,plots,existing]
     def busy():return state['future'] is not None and not state['future'].done()
     def launch(resuming):
         if busy():return
@@ -52,7 +53,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
                     from kiosk_cloud.data import ensure_survey
                     ensure_survey(survey.value)
                 all_scenarios=json.loads(coefficients.value)
-                c=Config(seed=seed.value,stores=stores.value,source=source.value,survey_path=survey.value,
+                c=Config(algorithm=algorithm.value,seed=seed.value,stores=stores.value,source=source.value,survey_path=survey.value,
                          visitors=visitors.value if override.value else None,train_days=train.value,validation_days=validation.value,
                          evaluation_days=evaluation.value,repetitions=repetitions.value or None,workers=workers.value,
                          checkpoint_every=interval.value,checkpoint_keep=keep.value,auto_cleanup=cleanup.value,models=list(models.value),scenarios={k:all_scenarios[k] for k in scenarios.value},raw_logs=logs.value,plots=plots.value)
@@ -126,7 +127,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
                 print('조건부 추천:',path);display(pd.DataFrame(choices))
             except Exception:traceback.print_exc()
     start.on_click(lambda _:launch(False));resume.on_click(lambda _:launch(True));stop.on_click(halt);results.on_click(show);upload.on_click(publish);select.on_click(choose)
-    display(w.VBox([w.HTML('<h3>λ 조건부 추천 함수 · 파레토 연구</h3><p>학습 → 동결 검증 → 동결 평가. 반복마다 새 모델로 시작합니다. CPU 실행부터 확인하세요.</p>'),source,survey,
+    display(w.VBox([w.HTML('<h3>λ 조건부 추천 함수 · 파레토 연구</h3><p>학습 → 동결 검증 → 동결 평가. 반복마다 새 모델로 시작합니다. CPU 실행부터 확인하세요.</p>'),algorithm,source,survey,
                     w.HBox([stores,workers]),override,visitors,seed,models,scenarios,coefficients,w.HBox([train,validation,evaluation]),repetitions,interval,keep,cleanup,
                     w.HBox([logs,plots]),existing,w.HBox([start,resume,stop]),w.HBox([results,upload]),w.HBox([constraint,select]),status,out]))
     return state

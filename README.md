@@ -1,6 +1,8 @@
 # AI 키오스크 · λ 조건부 파레토 연구
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/phj9187/koisk-simulation/blob/main/notebooks/run_automatic.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/phj9187/koisk-simulation/blob/main/notebooks/run_actor_critic.ipynb)
+
+**새 기본 진입점은 Actor–Critic 신경망 실험입니다.** 개인별 모델은 고객 결과마다, 일별 모델은 하루 결과로 학습합니다. 두 모델 모두 5개 추천 가중치를 출력하고 기존 평가함수를 보상으로 사용합니다. [구조·학습·저장 설명](docs/actor_critic_ko.md). 기존 `run_automatic.ipynb`, `screening_*.yaml` 및 1000일 실행은 무작위 탐색 기준 실험으로 보존됩니다.
 
 **새 Colab 실행 노트북**에서 고객·가게 만족도의 여러 타협점을 탐색합니다. 고정 모델은 `w=f(λ)`, 상황별 모델은 `w=f(상황, λ)`를 매장·만족도 시나리오별로 학습합니다. 두 모델은 동일한 하루 목적과 동일한 시뮬레이션 호출 예산으로 비교합니다. 성능 향상이나 상황별 모델의 우월성을 미리 가정하지 않습니다.
 
@@ -17,7 +19,7 @@ Drive 루트는 `/content/drive/MyDrive/AI-Kiosk-Data`입니다. 원본 Colab과
 ## 학습과 평가
 
 - λ가 고객·가게 성과의 선호 비율입니다. 만족도 구성 가중치, 추천 가중치와 별개입니다.
-- 두 정책은 λ별 실제 추천 가중치를 출력합니다. 학습은 공통 하루 보상의 paired random search이며 기존 LinUCB·톰프슨 알고리즘과 다릅니다.
+- 새 두 정책은 λ별 추천 가중치를 Dirichlet Actor로 출력하고 Critic의 기대 보상과 실제 보상의 차이로 학습합니다. `actor_critic_*.yaml`을 사용합니다. 이전 paired random search는 `screening_*.yaml`에서만 유지합니다.
 - 반복마다 초기 모델로 시작해 **학습 → 동결 검증 → 동결 최종 평가**를 수행합니다. 반복 수 0은 중지할 때까지 반복합니다.
 - 결과는 고객·가게 성과 쌍, 근사 파레토 후보, λ별 가중치 함수, 하이퍼볼륨과 독립 반복 차이로 저장합니다.
 - 만족도 시나리오는 명시적인 가정입니다. 실제 주관적 만족도를 검증한 결과가 아닙니다. 단일 최적 λ는 운영 제약 없이 추천하지 않습니다.
@@ -31,10 +33,10 @@ python -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements.txt
 PYTHONPATH=src python -m unittest discover -s tests -p 'test_*.py' -v
-PYTHONPATH=src python -m kiosk_research.cli --config config/screening_pilot.yaml --root runs
+PYTHONPATH=src python -m kiosk_research.cli --config config/actor_critic_pilot.yaml --root runs
 ```
 
-하루 경계에서 중지: `--days 1`. 재개: `--resume 실험ID --root runs`. 다른 프로세스에서 중지 요청: `--stop 실험ID --root runs`. 기본 스모크 실험은 8개 가상 매장·하루 15명·학습 2일·검증 1일·평가 1일이며 실제 연구 성과로 해석하지 않습니다.
+하루 경계에서 중지: `--days 1`. 재개: `--resume 실험ID --root runs`. 다른 프로세스에서 중지 요청: `--stop 실험ID --root runs`. 신경망 pilot은 8개 가상 매장·평가기준 1개·하루 5명·학습 2일·검증 1일·평가 1일이며 실제 연구 성과로 해석하지 않습니다.
 
 ## 코드와 결과
 

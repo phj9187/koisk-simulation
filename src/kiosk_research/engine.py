@@ -24,7 +24,11 @@ class Experiment:
         if not self.id or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_' for c in self.id):raise ValueError('invalid experiment ID')
         self.directory=self.root/'experiments'/self.id;self.checkpoints=self.root/'checkpoints'/self.id
         self.runtime=runtime_info()
+        if config.algorithm=='actor_critic':
+            import torch
+            self.runtime['libraries']['torch']=torch.__version__
         self.identity={'runtime_versions':{'python':self.runtime['python'],'libraries':self.runtime['libraries']},'schema':4,'id':self.id,'experiment_id':self.id,'config':config.to_dict(),'source_sha256':source_hash(),'git_commit':git_version()['git_commit']}
+        if config.algorithm=='actor_critic':self.identity['schema']=5
         if resume:
             if not self.directory.is_dir():raise FileNotFoundError('experiment not found')
             with exclusive_lock(self.directory/'RUNNING.lock'):self._load()
@@ -40,6 +44,9 @@ class Experiment:
                                'rng':'All exogenous and optimizer streams are deterministically regenerated from seed/day/store/purpose; no hidden global RNG state.'}
                 if config.continual:
                     self.metadata['protocol']='continual learning across dependent cycles; frozen validation/evaluation within each cycle; not independent repetitions'
+                if config.algorithm=='actor_critic':
+                    self.metadata['protocol']='Dirichlet actor + TD(0) critic, gamma=1 finite day; contextual customer updates; fixed daily batch update; frozen validation/evaluation; '+('dependent continual cycles' if config.continual else 'independent repetitions')
+                    self.metadata['rng']='Seeded exogenous streams; private per-policy torch CPU RNG and Adam state saved in checkpoints.'
                 self.state={'identity':self.identity,'day':0,'stop_reason':'','cases':cases,'stores':{},'parts':[],'raw_parts':[]}
                 write_json(self.directory/'metadata.json',self.metadata);self._save()
         self._frontier=self._signature()

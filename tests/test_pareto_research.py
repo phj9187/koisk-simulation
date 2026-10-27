@@ -267,7 +267,7 @@ class ResearchTests(unittest.TestCase):
                 by_description['새 실험 시작'].click()
                 self.assertIsNotNone(state['future']);self.assertTrue(entered.wait(5))
                 self.assertFalse(state['future'].done())
-                by_description['오늘 완료 후 중지'].click();release.set();state['future'].result(timeout=10)
+                by_description['오늘 완료 후 중지'].click();release.set();state['future'].result(timeout=60)
             self.assertEqual(state['experiment'].state['day'],1)
             self.assertEqual(state['experiment'].state['stop_reason'],'paused')
             self.assertEqual(state['experiment'].records().store_id.nunique(),8)

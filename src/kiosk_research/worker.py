@@ -28,12 +28,22 @@ def store_day(task):
     for scenario_name,scenario in sorted(config.scenarios.items()):
         for model in config.models:
             key=scenario_name+':'+model
-            incumbent=Policy.initial(model) if fresh else Policy.restore(previous['policies'][key])
+            if config.algorithm=='actor_critic':
+                from kiosk_research.actor_critic import ActorCriticPolicy
+                def initial_policy():return ActorCriticPolicy(model,scenario,seed_for(config.seed,'neural',case['id'],scenario_name),visitors,hours)
+            else:
+                def initial_policy():return Policy.initial(model)
+            incumbent=initial_policy() if fresh else Policy.restore(previous['policies'][key])
+            neural=config.algorithm=='actor_critic'
+            if neural:incumbent.training=phase=='train'
             count=0 if fresh else previous['optimizer_steps'][key]
             started=time.perf_counter()
             outcomes=[simulate(people,store,incumbent,lam,scenario,event_seed,config.wait_scale,hours,config.raw_logs) for lam in lambdas]
             accepted=False;initial=None;before=sum(r['reward'] for r in outcomes)/len(lambdas)
-            if phase=='train' and visitors:
+            if neural:
+                incumbent.end_day();count=incumbent.updates
+                if phase!='train':initial=[simulate(people,store,initial_policy(),lam,scenario,event_seed,config.wait_scale,hours,False) for lam in lambdas]
+            elif phase=='train' and visitors:
                 candidate=incumbent.perturb(seed_for(config.seed,'proposal',day,case['id'],scenario_name),config.sigma)
                 alternatives=[simulate(people,store,candidate,lam,scenario,event_seed,config.wait_scale,hours,config.raw_logs) for lam in lambdas]
                 if sum(r['reward'] for r in alternatives)>sum(r['reward'] for r in outcomes):incumbent=candidate;outcomes=alternatives;accepted=True
@@ -44,7 +54,7 @@ def store_day(task):
                 row={k:v for k,v in result.items() if k not in ('logs','initial_stock','terminal_stock','mean_weights')}
                 row.update(day=day,repetition=rep,phase=phase,store_id=case['id'],scenario=scenario_name,model=model,lambda_value=float(lam),
                            accepted_candidate=accepted,optimizer_steps=count,incumbent_train_reward=before if phase=='train' else None,
-                           training_simulator_calls=2 if phase=='train' and visitors else 0,simulator_calls=2 if phase!='train' or visitors else 1,
+                           training_simulator_calls=(1 if neural else 2) if phase=='train' and visitors else 0,simulator_calls=(1 if neural else 2) if phase=='train' and visitors else (2 if phase!='train' else 1),
                            elapsed_seconds=elapsed/len(lambdas),analysis_weight=case['features'].get('analysis_weight',1.),
                            initial_customer=None if initial is None else initial[index]['customer'],
                            initial_store=None if initial is None else initial[index]['store'],initial_reward=None if initial is None else initial[index]['reward'])

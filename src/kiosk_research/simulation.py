@@ -10,6 +10,7 @@ from kiosk_research.evaluation import affordability,wait_utility,ingredient_risk
 
 def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw=False):
     store=copy.deepcopy(original);initial=dict(store.stock);rng=random.Random(seed);events=[]
+    if hasattr(policy,'begin_episode'):policy.begin_episode(original,lam,scenario,len(people),hours)
     for c in people:
         profile=assumed_purpose_shape(c.purpose,11,int(hours));cdf=list(accumulate(profile))
         draw=rng.random()*cdf[-1];hour=next(i for i,v in enumerate(cdf) if draw<=v)
@@ -20,6 +21,7 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
     max_margin=max((m.price-m.cost for m in store.menus),default=1.)
     risks=ingredient_risks(store)
     risk_scale=max((risks[m.ingredient]*m.units for m in store.menus),default=0.)
+    initial_risk=sum(risks[k]*v for k,v in initial.items());previous_reward=0.
     def private(c,m,now):return 2.5*affinity(c,m)-c.price_sensitivity*m.price/20.-c.wait_sensitivity*predicted_wait(store,m,now)/30.
     for index,(arrival,c,shocks,u) in enumerate(events):
         options=available(store,c)
@@ -40,6 +42,14 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
         wait=finish-arrival;fit=affinity(c,picked);affordable=affordability(picked.price,c.budget);wait_value=wait_utility(wait,wait_scale)
         taste+=fit;price+=affordable;waiting+=wait_value;profit+=picked.price-picked.cost;wait_total+=wait
         served+=1;accepted+=int(took)
+        if hasattr(policy,'feedback'):
+            n=max(1,len(people))
+            cumulative={'taste_fit_per_visitor':taste/n,'affordability_per_visitor':price/n,
+                        'wait_component_per_visitor':waiting/n,
+                        'margin_component':min(1.,max(0.,profit/max(1e-9,n*max_margin))),
+                        'waste_reduction_component':max(0.,min(1.,1.-sum(risks[k]*v for k,v in store.stock.items())/initial_risk)) if initial_risk>0 else 0.}
+            reward=score_outcomes(cumulative,scenario,lam)['reward']
+            policy.feedback(reward-previous_reward);previous_reward=reward
         for i,v in enumerate(w):weight_sum[i]+=v
         if raw:logs.append({'event':index,'served':True,'arrival':arrival,'chosen':picked.name,'recommended':suggestion.name,
                             'accepted':took,'taste_fit':fit,'affordability':affordable,'wait_component':wait_value,
@@ -50,6 +60,7 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
     margin=min(1.,max(0.,profit/max(1e-9,n*max_margin))) if n else 0.
     waste_reduction=max(0.,min(1.,1.-leftover/initial_risk)) if n and initial_risk>0 else 0.
     outcomes=dict(zip(('taste_fit_per_visitor','affordability_per_visitor','wait_component_per_visitor','margin_component','waste_reduction_component'),[*components,margin,waste_reduction]))
+    if hasattr(policy,'end_episode'):policy.end_episode(score_outcomes(outcomes,scenario,lam)['reward'])
     return {**score_outcomes(outcomes,scenario,lam),'taste_fit_per_visitor':components[0],
             'affordability_per_visitor':components[1],'wait_component_per_visitor':components[2],'margin_component':margin,
             'waste_reduction_component':waste_reduction,'visitors':n,'served':served,'eligible':bool(n),'profit':profit,
