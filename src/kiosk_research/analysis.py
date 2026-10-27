@@ -186,6 +186,8 @@ def export(experiment,target_root=None):
     statistics=compare(points,experiment.config.seed,independent=independent);write_json(target/'statistics.json',{'comparisons':statistics,'store_comparisons':compare(stores,experiment.config.seed,per_store=True,independent=independent),'completed_repetitions':completed if independent else [],'completed_cycles':completed if not independent else []})
     write_json(target/'metadata.json',{**experiment.metadata,'completed_day':experiment.state['day'],'completed_repetitions':completed if independent else [],'completed_cycles':completed if not independent else [],'config':experiment.config.to_dict()})
     if experiment.config.plots:
+        from kiosk_research.linecharts import export_lines
+        export_lines(experiment,target/'line_charts')
         for i,scenario in enumerate(experiment.config.scenarios):
             plots(frame[frame.scenario==scenario],points[points.scenario==scenario],
                   [s for s in statistics if s['scenario']==scenario],

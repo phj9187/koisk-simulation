@@ -15,7 +15,7 @@ def status(root,experiment_id=None):
     return read_json(path) if path.exists() else {'status':'not_started'}
 
 
-def run_session(root,config=None,resume_id=None,day_budget=None):
+def run_session(root,config=None,resume_id=None,day_budget=None,target_day=None):
     run=Experiment.resume(root,resume_id) if resume_id else Experiment(config or Config(),root)
     print('Experiment:',run.id,flush=True)
     print('Recovery commit:',run.identity['git_commit'],flush=True)
@@ -29,7 +29,7 @@ def run_session(root,config=None,resume_id=None,day_budget=None):
                        'stop_reason':r.state['stop_reason'],'updated_at_utc':datetime.now(timezone.utc).isoformat()})
             print('Cycle summary:',summary,flush=True)
     try:
-        run.run(day_budget=day_budget,day_callback=checkpoint)
+        run.run(day_budget=day_budget,day_callback=checkpoint,target_day=target_day)
         summary=export(run)
         write_json(run.directory/'session_result.json',{'experiment_id':run.id,'summary':str(summary),
                    'stop_reason':run.state['stop_reason'],'updated_at_utc':datetime.now(timezone.utc).isoformat()})

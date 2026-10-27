@@ -72,13 +72,13 @@ class Experiment:
     def _save(self):
         save_checkpoint(self.checkpoints/f"day_{self.state['day']:06d}.json",self.state)
         self._valid(self.checkpoints/f"day_{self.state['day']:06d}.json",True)
-        valid=[]
-        for p in sorted(self.checkpoints.glob('day_*.json')):
-            try:self._valid(p,True);valid.append(p)
-            except (OSError,ValueError,KeyError):pass
         removed=[]
         keep=self.config.checkpoint_keep
         if self.config.auto_cleanup:
+            valid=[]
+            for p in sorted(self.checkpoints.glob('day_*.json')):
+                try:self._valid(p,True);valid.append(p)
+                except (OSError,ValueError,KeyError):pass
             # Persist and verify a cleanup plan before deleting redundant snapshots.
             old=valid[:-keep]
             folders=[]
@@ -162,20 +162,29 @@ class Experiment:
         self.state['parts'].append({'path':relative,'sha256':digest})
         if raw:self.state['raw_parts'].append(raw)
         self.state['stores']=stores;self.state['day']=day
+        if self.config.early_stopping and self.config.stage(day)[1]=='train':
+            from kiosk_research.convergence import observe
+            result=observe(self)
+            self.state['convergence']=result
+            if result['converged']:self.state['stop_reason']='converged'
         if (self.directory/'STOP').exists():self.state['stop_reason']='paused'
         elif self.config.complete(day):self.state['stop_reason']='completed'
 
-    def run(self,day_budget=None,progress=None,day_callback=None):
+    def run(self,day_budget=None,progress=None,day_callback=None,target_day=None):
         if day_budget is not None and (type(day_budget) is not int or day_budget<1):raise ValueError('invalid day budget')
+        if target_day is not None and (type(target_day) is not int or target_day<1):raise ValueError('invalid absolute target day')
         with exclusive_lock(self.directory/'RUNNING.lock'):
             if self._signature()!=self._frontier:raise RuntimeError('Disk state changed; reload this experiment')
-            if self.state['stop_reason']=='completed':return
-            if self.state['stop_reason']=='paused':
+            if self.state['stop_reason'] in ('completed','converged'):return
+            if target_day is not None and self.state['day']>=target_day:
+                self.state['stop_reason']='target_reached';self._save();self._frontier=self._signature();return
+            if self.state['stop_reason'] in ('paused','target_reached'):
                 (self.directory/'STOP').unlink(missing_ok=True);self.state['stop_reason']=''
             count=0
             try:
                 while not self.state['stop_reason']:
                     self._next_day(progress);count+=1
+                    if target_day is not None and self.state['day']>=target_day:self.state['stop_reason']='target_reached'
                     if day_budget and count>=day_budget and not self.state['stop_reason']:self.state['stop_reason']='paused'
                     _,_,offset=self.config.stage(self.state['day'])
                     boundary=offset in (self.config.train_days,self.config.train_days+self.config.validation_days)

@@ -36,6 +36,10 @@ class Config:
     auto_cleanup: bool = True
     cross_evaluation: dict = field(default_factory=interior_validation_design)
     continual: bool = False
+    early_stopping: bool = False
+    convergence_window: int = 100
+    convergence_tolerance: float = .01
+    convergence_probe_every: int = 5
 
     def validate(self, require_source=True):
         for key in ('stores','train_days','validation_days','evaluation_days','checkpoint_every','workers','train_lambdas','checkpoint_keep'):
@@ -49,8 +53,14 @@ class Config:
             if v is not None and (type(v) is not int or v<(0 if key=='visitors' else 1)): raise ValueError(f'invalid {key}')
         for key in ('sigma','wait_scale'):
             if not math.isfinite(getattr(self,key)) or getattr(self,key)<=0: raise ValueError(f'invalid {key}')
-        for key in ('raw_logs','plots','auto_cleanup','continual'):
+        for key in ('raw_logs','plots','auto_cleanup','continual','early_stopping'):
             if type(getattr(self,key)) is not bool: raise ValueError(f'{key} must be boolean')
+        if self.early_stopping and not self.continual:raise ValueError('early stopping requires continual learning')
+        for key in ('convergence_window','convergence_probe_every'):
+            if type(getattr(self,key)) is not int or getattr(self,key)<1:raise ValueError('invalid '+key)
+        if self.convergence_window<100:raise ValueError('at least 100 training dates required')
+        if self.convergence_probe_every>self.convergence_window//2:raise ValueError('probe interval too long')
+        if not math.isfinite(self.convergence_tolerance) or not 0<self.convergence_tolerance<=.1:raise ValueError('invalid convergence tolerance')
         if self.source not in ('synthetic','empirical'): raise ValueError('unknown source')
         if self.source=='synthetic' and self.stores%8: raise ValueError('synthetic stores must be a multiple of 8')
         if self.source=='empirical' and require_source and not Path(self.survey_path).is_file():

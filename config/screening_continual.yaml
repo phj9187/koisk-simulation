@@ -7,6 +7,10 @@ validation_days: 5
 evaluation_days: 5
 repetitions: null
 continual: true
+early_stopping: true
+convergence_window: 100
+convergence_tolerance: 0.01
+convergence_probe_every: 5
 train_lambdas: 3
 checkpoint_every: 1
 checkpoint_keep: 2
