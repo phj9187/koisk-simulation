@@ -22,6 +22,12 @@ def run_session(root,config=None,resume_id=None,day_budget=None):
     print('Drive status:',run.directory/'progress.json',flush=True)
     def checkpoint(r):
         print('Day',r.state['day'],r.config.stage(r.state['day'])[1],flush=True)
+        cycle=r.config.train_days+r.config.validation_days+r.config.evaluation_days
+        if r.config.continual and r.state['day']%cycle==0:
+            summary=export(r)
+            write_json(r.directory/'session_result.json',{'experiment_id':r.id,'summary':str(summary),
+                       'stop_reason':r.state['stop_reason'],'updated_at_utc':datetime.now(timezone.utc).isoformat()})
+            print('Cycle summary:',summary,flush=True)
     try:
         run.run(day_budget=day_budget,day_callback=checkpoint)
         summary=export(run)

@@ -1,0 +1,16 @@
+seed: 42
+stores: 8
+source: synthetic
+visitors: 30
+train_days: 20
+validation_days: 5
+evaluation_days: 5
+repetitions: null
+continual: true
+train_lambdas: 3
+checkpoint_every: 1
+checkpoint_keep: 2
+auto_cleanup: false
+workers: 1
+raw_logs: false
+plots: true

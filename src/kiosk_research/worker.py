@@ -24,7 +24,7 @@ def store_day(task):
         rng=random.Random(seed_for(config.seed,'lambdas',day));lambdas=[0.,1.]+[rng.random() for _ in range(config.train_lambdas-2)]
     else:lambdas=config.validation_lambdas if phase=='validation' else config.evaluation_lambdas
     hours=case['features'].get('opening_hours');hours=int(hours) if hours and 1<=hours<=24 else 8
-    policies={};steps={};rows=[];logs=[];inventory={};fresh=previous is None or previous['repetition']!=rep
+    policies={};steps={};rows=[];logs=[];inventory={};fresh=previous is None or (previous['repetition']!=rep and not config.continual)
     for scenario_name,scenario in sorted(config.scenarios.items()):
         for model in config.models:
             key=scenario_name+':'+model

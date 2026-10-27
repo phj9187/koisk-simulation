@@ -38,6 +38,8 @@ class Experiment:
                                'assumptions':'Synthetic customer behavior/satisfaction; no real-world effectiveness claim.',
                                'protocol':'lambda-conditioned weights; paired daily random search; frozen validation/evaluation; fresh independent repetitions',
                                'rng':'All exogenous and optimizer streams are deterministically regenerated from seed/day/store/purpose; no hidden global RNG state.'}
+                if config.continual:
+                    self.metadata['protocol']='continual learning across dependent cycles; frozen validation/evaluation within each cycle; not independent repetitions'
                 self.state={'identity':self.identity,'day':0,'stop_reason':'','cases':cases,'stores':{},'parts':[],'raw_parts':[]}
                 write_json(self.directory/'metadata.json',self.metadata);self._save()
         self._frontier=self._signature()
@@ -95,9 +97,9 @@ class Experiment:
                 protected.update(p['path'] for p in saved['parts']+saved['raw_parts'])
             known=set(references.values())
             for path in (self.directory/'detailed_results').glob('*.parquet'):
-                if path.is_symlink() or str(path.relative_to(self.directory)) in protected:continue
+                if path.is_symlink() or path.relative_to(self.directory).as_posix() in protected:continue
                 if hashlib.sha256(path.read_bytes()).hexdigest() in known:
-                    path.unlink();removed.append(str(path.relative_to(self.directory)))
+                    path.unlink();removed.append(path.relative_to(self.directory).as_posix())
             write_json(self.directory/'cleanup_last.json',{'day':self.state['day'],'removed':removed,'retained_checkpoints':[p.name for p in valid[-keep:]],'policy':'verified redundant snapshots and byte-identical unreferenced shards only'})
         model_state={'day':self.state['day'],'stores':self.state['stores']}
         write_json(self.root/'models'/self.id/'latest.json',model_state)
@@ -118,7 +120,8 @@ class Experiment:
                  'active_day':active_day,'completed_stores':done,'total_stores':self.config.stores,
                  'total_days':total,'phase':self.config.stage(active_day or max(1,day))[1],
                  'stop_reason':self.state['stop_reason'],'status':'error' if error else self.state['stop_reason'] or 'ready',
-                 'error_type':error,'data_path':str(self.directory)}
+                 'error_type':error,'data_path':str(self.directory),
+                 'learning_mode':'continual' if self.config.continual else 'independent_repetitions'}
         if active_day is not None:payload['status']='running'
         write_json(self.directory/'progress.json',payload)
         write_json(self.root/'latest_run.json',payload)

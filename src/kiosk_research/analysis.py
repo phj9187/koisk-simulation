@@ -40,7 +40,7 @@ def aggregate(frame,per_store=False,phase='evaluation'):
     return out
 
 
-def compare(points,seed,per_store=False):
+def compare(points,seed,per_store=False,independent=True):
     if points.empty:return []
     values=[]
     groups=['repetition','scenario','model']+(['store_id'] if per_store else [])
@@ -53,11 +53,13 @@ def compare(points,seed,per_store=False):
         p=v.pivot(index='repetition',columns='model',values='hypervolume').dropna()
         if not {'fixed','contextual'}<=set(p):continue
         diff=(p.contextual-p.fixed).to_numpy();ci=None
-        if len(diff)>=5:
+        if len(diff)>=5 and independent:
             rng=np.random.default_rng(seed);ci=np.quantile(rng.choice(diff,(5000,len(diff)),replace=True).mean(axis=1),[.025,.975]).tolist()
         results.append({'scenario':scenario,'independent_repetitions':len(diff),'mean_hypervolume_contextual_minus_fixed':float(diff.mean()),
                         'ci95':ci,'differences':diff.tolist(),'status':'descriptive_only' if ci is None else 'paired_repetition_bootstrap',
                         'reference_point':[0.,0.],'scope':'equal-store mean of store-specific frontiers; conditional on sampled stores' if per_store else 'shared-lambda aggregate frontier; conditional on sampled stores; not a population or causal estimate'})
+        if not independent:
+            results[-1].update(independent_repetitions=0,dependent_cycles=len(diff),status='dependent_cycles_descriptive_only')
     return results
 
 
@@ -180,8 +182,9 @@ def export(experiment,target_root=None):
     cross,robustness=cross_evaluate(points,{**experiment.config.scenarios,**experiment.config.cross_evaluation})
     atomic_bytes(target/'cross_evaluation.csv',cross.to_csv(index=False).encode('utf-8'))
     atomic_bytes(target/'robustness.csv',robustness.to_csv(index=False).encode('utf-8'))
-    statistics=compare(points,experiment.config.seed);write_json(target/'statistics.json',{'comparisons':statistics,'store_comparisons':compare(stores,experiment.config.seed,per_store=True),'completed_repetitions':completed})
-    write_json(target/'metadata.json',{**experiment.metadata,'completed_day':experiment.state['day'],'completed_repetitions':completed,'config':experiment.config.to_dict()})
+    independent=not experiment.config.continual
+    statistics=compare(points,experiment.config.seed,independent=independent);write_json(target/'statistics.json',{'comparisons':statistics,'store_comparisons':compare(stores,experiment.config.seed,per_store=True,independent=independent),'completed_repetitions':completed if independent else [],'completed_cycles':completed if not independent else []})
+    write_json(target/'metadata.json',{**experiment.metadata,'completed_day':experiment.state['day'],'completed_repetitions':completed if independent else [],'completed_cycles':completed if not independent else [],'config':experiment.config.to_dict()})
     if experiment.config.plots:
         for i,scenario in enumerate(experiment.config.scenarios):
             plots(frame[frame.scenario==scenario],points[points.scenario==scenario],
@@ -213,5 +216,9 @@ Synthetic outcomes, not measured human satisfaction.
 - Cross evaluation of final dates is descriptive and must not be used to select a final policy.
 - Weighted sums, finite search and model classes do not guarantee the whole/global Pareto frontier.
 """
+    if not independent:
+        text=text.replace(f'Completed independent repetitions: {len(completed)}',f'Completed dependent learning cycles: {len(completed)}')
+        text=text.replace('Each repetition restarts models.','Models carry forward across cycles; models do not restart.')
+        text=text.replace('Fewer than five repetitions: descriptive differences only; otherwise repetition-level paired bootstrap.','Dependent cycles: descriptive differences only; no independent-repetition confidence interval.')
     atomic_bytes(target/'report.md',text.encode('utf-8'));write_json(target/'complete.json',completion)
     return target

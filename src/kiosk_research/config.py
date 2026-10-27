@@ -35,6 +35,7 @@ class Config:
     checkpoint_keep: int = 2
     auto_cleanup: bool = True
     cross_evaluation: dict = field(default_factory=interior_validation_design)
+    continual: bool = False
 
     def validate(self, require_source=True):
         for key in ('stores','train_days','validation_days','evaluation_days','checkpoint_every','workers','train_lambdas','checkpoint_keep'):
@@ -48,7 +49,7 @@ class Config:
             if v is not None and (type(v) is not int or v<(0 if key=='visitors' else 1)): raise ValueError(f'invalid {key}')
         for key in ('sigma','wait_scale'):
             if not math.isfinite(getattr(self,key)) or getattr(self,key)<=0: raise ValueError(f'invalid {key}')
-        for key in ('raw_logs','plots','auto_cleanup'):
+        for key in ('raw_logs','plots','auto_cleanup','continual'):
             if type(getattr(self,key)) is not bool: raise ValueError(f'{key} must be boolean')
         if self.source not in ('synthetic','empirical'): raise ValueError('unknown source')
         if self.source=='synthetic' and self.stores%8: raise ValueError('synthetic stores must be a multiple of 8')
