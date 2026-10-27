@@ -98,3 +98,15 @@ def build_automatic():
     path.write_text(json.dumps(notebook,ensure_ascii=False,indent=1),encoding='utf-8')
 
 if __name__=='__main__':build_automatic()
+
+
+def build_convergence():
+    root=Path(__file__).resolve().parents[1]
+    notebook=json.loads((root/'notebooks/run_automatic.ipynb').read_text(encoding='utf-8'))
+    notebook['metadata']['colab']['name']='Kiosk_Until_Converged.ipynb'
+    notebook['cells'][0]['source']=['# 키오스크 누적 학습 — 수렴 시 자동 중지\n\n이후 새 누적 실행용입니다. 최소 100학습 날짜 구간에서 모든 정책의 추천 가중치와 별도 검증 점수가 안정되면 자동 저장·중지합니다. TARGET_DAY는 추가 절대 일수 상한이며 0은 별도 상한 없음입니다. 기존 실험은 원래 커밋의 노트북으로 재개하세요.\n']
+    notebook['cells'][6]['source']=[line.replace('PRESET = "pilot"','PRESET = "continual"') for line in notebook['cells'][6]['source']]
+    (root/'notebooks/run_until_converged.ipynb').write_text(json.dumps(notebook,ensure_ascii=False,indent=1),encoding='utf-8')
+
+
+if __name__=='__main__':build_convergence()
