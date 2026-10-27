@@ -95,7 +95,7 @@ class LiveDashboard:
             self.handle.update(HTML(body))
 
 
-def run_live(root,config,deadline_utc,resume_id=None,target_day=1000,display=True):
+def run_live(root,config,deadline_utc,resume_id=None,target_day=None,display=True):
     if config.algorithm!='actor_critic':raise ValueError('neural experiment required')
     run=Experiment.resume(root,resume_id) if resume_id else Experiment(config,root)
     if run.config.algorithm!='actor_critic':raise ValueError('cannot resume legacy random search here')

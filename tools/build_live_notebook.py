@@ -14,7 +14,6 @@ from kiosk_research.config import Config
 from kiosk_research.live import run_live
 DEADLINE_KST = "2026-10-28T12:00:00+09:00" #@param {type:"string"}
 RESUME_ID = "" #@param {type:"string"}
-TARGET_DAY = 1000 #@param {type:"integer"}
 deadline = datetime.fromisoformat(DEADLINE_KST)
 if deadline.tzinfo is None or deadline <= datetime.now(timezone.utc):
     raise ValueError("미래의 시간대 포함 중지 시각을 입력하세요.")
@@ -22,7 +21,7 @@ config = Config.load(CODE_ROOT / "config/actor_critic_continual.yaml")
 config.early_stopping = False
 config.auto_cleanup = False
 run = run_live(DATA_ROOT, config, deadline.astimezone(timezone.utc).isoformat(),
-               resume_id=RESUME_ID.strip() or None, target_day=TARGET_DAY)
+               resume_id=RESUME_ID.strip() or None, target_day=None)
 print("Saved:",run.id,run.state["day"],run.state["stop_reason"])
 '''
     n['cells'][6]['source']=code.splitlines(keepends=True)
@@ -31,6 +30,9 @@ print("Saved:",run.id,run.state["day"],run.state["stop_reason"])
             c['source']=[s.replace('REVISION = "main"',f'REVISION = "{revision}"') for s in c['source']]
             c['outputs']=[];c['execution_count']=None
             compile(''.join(c['source']),'live-notebook','exec')
+    for c in n['cells']:
+        if c['cell_type']=='markdown':
+            c['source']=[s.replace('1000일 상한도 유지합니다.','일수 상한은 없습니다.').replace('정오 또는 1000일 중 먼저 도달하는 조건에서','정오에') for s in c['source']]
     target=ROOT/'notebooks/run_actor_critic_live.ipynb'
     target.write_text(json.dumps(n,ensure_ascii=False,indent=1),encoding='utf-8')
     return target
