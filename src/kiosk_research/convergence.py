@@ -13,8 +13,10 @@ from kiosk_research.persistence import atomic_bytes,encoded,read_json,write_json
 
 
 def training_dates(config,day):
-    size=config.train_days+config.validation_days+config.evaluation_days
+    size=config.cycle_days
     full,offset=divmod(day,size)
+    if config.lambda_search=='pareto_two_stage':
+        return full*config.train_days+min(offset,config.coarse_days)+max(0,min(offset-config.coarse_days-config.validation_days,config.train_days-config.coarse_days))
     return full*config.train_days+min(offset,config.train_days)
 
 

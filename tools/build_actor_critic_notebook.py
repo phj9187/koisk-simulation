@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def build(revision='main'):
     for name in ('pilot','research','continual'):
         config=yaml.safe_load((ROOT/'config'/('screening_'+name+'.yaml')).read_text(encoding='utf-8'))
-        config.update(algorithm='actor_critic',auto_cleanup=False,workers=1,models=['no_recommendation','fixed','contextual'],decision_time_mode='equal')
+        config.update(algorithm='actor_critic',auto_cleanup=False,workers=1,models=['no_recommendation','fixed','contextual'],decision_time_mode='equal',lambda_search='pareto_two_stage',global_probe_every=5)
         if name=='pilot':
             config.update(visitors=5,scenarios={'balanced':{'customer':[.45,.25,.30],'store':[.75,.25]}})
         (ROOT/'config'/('actor_critic_'+name+'.yaml')).write_text(yaml.safe_dump(config,sort_keys=False),encoding='utf-8')
@@ -33,6 +33,7 @@ def build(revision='main'):
     for cell in notebook['cells']:
         if cell['cell_type']=='markdown':
             cell['source']=[s.replace('TARGET_DAY=1000은 절대 상한입니다.','별도의 일수 상한은 없습니다. 추천 없음과 두 AI를 같은 결정시간 공식으로 비교합니다.') for s in cell['source']]
+    notebook['cells'][5]['source']=['## 3. 파레토 2단계 탐색\n\npilot은 1일 넓은 학습 → 1일 동결 구간 선택 → 1일 집중 학습 → 1일 별도 검증 → 1일 평가, 총 5일입니다. research는 10/5/10/5/5일 × 5 독립 반복, continual은 같은 35일 주기에서 학습을 이어갑니다. 평가기준 α·β별로 파레토 무릎점 후보 주변을 탐색하되 불명확하면 전역 범위를 유지합니다. 추천 없음 비교를 포함하며 기존 실험은 원래 커밋으로 재개해야 합니다.\n']
     target=ROOT/'notebooks/run_actor_critic.ipynb'
     target.write_text(json.dumps(notebook,ensure_ascii=False,indent=1),encoding='utf-8')
     for cell in notebook['cells']:

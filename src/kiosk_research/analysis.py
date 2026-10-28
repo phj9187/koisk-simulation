@@ -24,6 +24,8 @@ def hypervolume(points):
 
 
 def aggregate(frame,per_store=False,phase='evaluation'):
+    if phase=='validation' and 'search_stage' in frame:
+        frame=frame[frame.search_stage.isin(['fixed','validation'])]
     keys=['repetition','scenario','model','lambda_value']+(['store_id'] if per_store else [])
     metrics=['customer','store','reward','profit','mean_total_wait','served','leftover_units','initial_customer','initial_store','initial_reward']+list(CUSTOMER_METRICS+STORE_METRICS)+['served_fraction','risk_reduction_applicable']+[k for k in frame if k.startswith('weight_')]
     rows=[]
@@ -175,13 +177,17 @@ def export(experiment,target_root=None):
         if (target/'complete.json').exists() and read_json(target/'complete.json')==completion:return target
         raise FileExistsError('incomplete or foreign summary; choose another output root')
     target.mkdir(parents=True)
-    size=experiment.config.train_days+experiment.config.validation_days+experiment.config.evaluation_days
+    size=experiment.config.cycle_days
     completed=list(range(1,experiment.state['day']//size+1))
-    validation_complete=[r for r in range(1,experiment.config.stage(experiment.state['day'])[0]+1) if (r-1)*size+experiment.config.train_days+experiment.config.validation_days<=experiment.state['day']]
+    validation_complete=[r for r in range(1,experiment.config.stage(experiment.state['day'])[0]+1) if (r-1)*size+experiment.config.validation_end_offset<=experiment.state['day']]
     final=frame[frame.repetition.isin(completed)];points=aggregate(final);stores=aggregate(final,True)
     from kiosk_research.baseline import compare_baseline
     baseline=compare_baseline(final,experiment.config.seed,independent=not experiment.config.continual)
     atomic_bytes(target/'baseline_comparison.csv',baseline.to_csv(index=False).encode('utf-8'))
+    if experiment.config.lambda_search=='pareto_two_stage':
+        write_json(target/'lambda_search.json',experiment.state.get('lambda_search',{}))
+        schedule=frame[['day','repetition','scenario','model','search_stage','lambda_schedule','lambda_value']].drop_duplicates()
+        atomic_bytes(target/'lambda_schedule.csv',schedule.to_csv(index=False).encode('utf-8'))
     validation=aggregate(frame[frame.repetition.isin(validation_complete)],True,'validation');curves=function_curves(experiment)
     for name,table in [('summary.csv',points),('store_frontiers.csv',stores),('validation.csv',validation),('function_curves.csv',curves),('store_effects.csv',store_effects(stores,experiment.state['cases']))]:atomic_bytes(target/name,table.to_csv(index=False).encode('utf-8'))
     from kiosk_research.cross_evaluation import cross_evaluate
@@ -234,5 +240,7 @@ Synthetic outcomes, not measured human satisfaction.
         text += '\nActor-Critic: contextual TD(0) customer updates; fixed daily batch updates. Gamma=1 within a finite day. Validation and evaluation use frozen mean policies. Training rows contain on-policy outcomes; use held-out dates for model comparison. Adam and private RNG states are checkpointed.\n'
     if 'no_recommendation' in experiment.config.models:
         text += '\nUnassisted customer-choice control: baseline_comparison.csv reports paired evaluation effects per scenario and lambda. All arms use the same decision-time formula. Baseline has no neural parameters, optimizer updates or recommendation weights. Independent-repetition confidence intervals require at least five independent repetitions; continual cycles remain descriptive.\n'
+    if experiment.config.lambda_search=='pareto_two_stage':
+        text += '\nTwo-stage search: coarse [0,0.5,1] training, frozen selection on shared validation dates, shared per-scenario geometric Pareto-knee refinement grid, and frozen post-refinement validation/evaluation on separate dates. Selection rows are excluded from final validation summaries. lambda_search.json and lambda_schedule.csv record the decisions. No clear knee retains global coverage; this is not a global optimality guarantee.\n'
     atomic_bytes(target/'report.md',text.encode('utf-8'));write_json(target/'complete.json',completion)
     return target

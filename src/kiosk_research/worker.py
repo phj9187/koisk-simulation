@@ -13,7 +13,7 @@ def seed_for(seed,*parts):return int.from_bytes(hashlib.sha256(repr((seed,*parts
 def restore_store(v):return Store([Menu(**m) for m in v['menus']],dict(v['stock']),v['cooks'],v['purpose'],list(v['cook_free_at']))
 
 def store_day(task):
-    config,case,previous,day=task;rep,phase,offset=config.stage(day)
+    config,case,previous,day=task[:4];plan=task[4] if len(task)>4 else None;rep,phase,offset=config.stage(day)
     template=restore_store(case['template']);store=copy.deepcopy(template)
     rng=random.Random(seed_for(config.seed,'stock',day,case['id']))
     store.stock={k:max(0,round(v*rng.uniform(.65,1.10))) for k,v in template.stock.items()};store.cook_free_at=[0.]*store.cooks
@@ -27,6 +27,10 @@ def store_day(task):
     policies={};steps={};rows=[];logs=[];inventory={};fresh=previous is None or (previous['repetition']!=rep and not config.continual)
     def episode(policy,lam,raw=False):return simulate(people,store,policy,lam,scenario,event_seed,config.wait_scale,hours,raw,config.decision_time_mode)
     for scenario_name,scenario in sorted(config.scenarios.items()):
+        schedule='fixed_protocol'
+        if config.lambda_search=='pareto_two_stage' and config.search_stage(day) in ('coarse','selection','refine'):
+            from kiosk_research.lambda_search import training_grid
+            lambdas,schedule=training_grid(config,day,scenario_name,plan)
         for model in config.models:
             key=scenario_name+':'+model
             baseline=model=='no_recommendation'
@@ -60,6 +64,7 @@ def store_day(task):
             for index,(lam,result) in enumerate(zip(lambdas,outcomes)):
                 row={k:v for k,v in result.items() if k not in ('logs','initial_stock','terminal_stock','mean_weights')}
                 row.update(day=day,repetition=rep,phase=phase,store_id=case['id'],scenario=scenario_name,model=model,lambda_value=float(lam),
+                           search_stage=config.search_stage(day),lambda_schedule=schedule,
                            accepted_candidate=accepted,optimizer_steps=count,incumbent_train_reward=before if phase=='train' else None,
                            training_simulator_calls=0 if baseline else (1 if neural else 2) if phase=='train' and visitors else 0,simulator_calls=1 if baseline else (1 if neural else 2) if phase=='train' and visitors else (2 if phase!='train' else 1),
                            elapsed_seconds=elapsed/len(lambdas),analysis_weight=case['features'].get('analysis_weight',1.),

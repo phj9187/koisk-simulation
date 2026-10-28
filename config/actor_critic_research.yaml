@@ -136,3 +136,5 @@ cross_evaluation:
     - 0.3
 algorithm: actor_critic
 decision_time_mode: equal
+lambda_search: pareto_two_stage
+global_probe_every: 5

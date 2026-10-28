@@ -14,6 +14,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
     import ipywidgets as w
     from IPython.display import display,Image
     algorithm=w.Dropdown(options=[('신경망 Actor–Critic','actor_critic'),('기존 무작위 탐색','random_search')],value='actor_critic',description='학습 방식')
+    search=w.Dropdown(options=[('파레토 2단계','pareto_two_stage'),('기존 고정 방식','fixed')],value='pareto_two_stage',description='λ 탐색')
     try:
         from google.colab import output
         output.enable_custom_widget_manager()
@@ -24,7 +25,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
     override=w.Checkbox(value=True,description='하루 방문자 수 직접 지정 (미선택: 매장별 조사 평균)')
     visitors=w.BoundedIntText(value=30,min=0,max=1000000,description='방문자 수')
     seed=w.BoundedIntText(value=42,min=0,max=2147483647,description='난수 시드')
-    train=w.BoundedIntText(value=10,min=1,max=100000,description='학습 일수')
+    train=w.BoundedIntText(value=10,min=2,max=100000,description='학습 일수')
     validation=w.BoundedIntText(value=2,min=1,max=10000,description='검증 일수')
     evaluation=w.BoundedIntText(value=3,min=1,max=10000,description='평가 일수')
     repetitions=w.BoundedIntText(value=1,min=0,max=100000,description='반복 (0=계속)')
@@ -42,7 +43,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
     constraint=w.BoundedFloatText(value=.5,min=0,max=1,step=.05,description='최소 고객 만족도');select=w.Button(description='검증 자료로 λ 추천')
     status=w.HTML('대기 중. 기본 설정은 소규모 가상 검증용입니다.');out=w.Output();pool=ThreadPoolExecutor(max_workers=1)
     state={'experiment':None,'future':None,'summary':None}
-    fields=[algorithm,source,survey,stores,override,visitors,seed,train,validation,evaluation,repetitions,workers,interval,keep,cleanup,models,scenarios,coefficients,logs,plots,existing]
+    fields=[algorithm,search,source,survey,stores,override,visitors,seed,train,validation,evaluation,repetitions,workers,interval,keep,cleanup,models,scenarios,coefficients,logs,plots,existing]
     def busy():return state['future'] is not None and not state['future'].done()
     def launch(resuming):
         if busy():return
@@ -53,7 +54,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
                     from kiosk_cloud.data import ensure_survey
                     ensure_survey(survey.value)
                 all_scenarios=json.loads(coefficients.value)
-                c=Config(algorithm=algorithm.value,decision_time_mode='equal',seed=seed.value,stores=stores.value,source=source.value,survey_path=survey.value,
+                c=Config(algorithm=algorithm.value,lambda_search=search.value,decision_time_mode='equal',seed=seed.value,stores=stores.value,source=source.value,survey_path=survey.value,
                          visitors=visitors.value if override.value else None,train_days=train.value,validation_days=validation.value,
                          evaluation_days=evaluation.value,repetitions=repetitions.value or None,workers=workers.value,
                          checkpoint_every=interval.value,checkpoint_keep=keep.value,auto_cleanup=cleanup.value,models=list(models.value),scenarios={k:all_scenarios[k] for k in scenarios.value},raw_logs=logs.value,plots=plots.value)
@@ -127,7 +128,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
                 print('조건부 추천:',path);display(pd.DataFrame(choices))
             except Exception:traceback.print_exc()
     start.on_click(lambda _:launch(False));resume.on_click(lambda _:launch(True));stop.on_click(halt);results.on_click(show);upload.on_click(publish);select.on_click(choose)
-    display(w.VBox([w.HTML('<h3>λ 조건부 추천 함수 · 파레토 연구</h3><p>학습 → 동결 검증 → 동결 평가. 반복마다 새 모델로 시작합니다. CPU 실행부터 확인하세요.</p>'),algorithm,source,survey,
+    display(w.VBox([w.HTML('<h3>λ 조건부 추천 함수 · 파레토 연구</h3><p>파레토 2단계: 넓은 학습 → 동결 구간 선택 → 집중 학습 → 별도 동결 검증·평가. 검증 일수는 각 검증 단계에 적용됩니다.</p>'),algorithm,search,source,survey,
                     w.HBox([stores,workers]),override,visitors,seed,models,scenarios,coefficients,w.HBox([train,validation,evaluation]),repetitions,interval,keep,cleanup,
                     w.HBox([logs,plots]),existing,w.HBox([start,resume,stop]),w.HBox([results,upload]),w.HBox([constraint,select]),status,out]))
     return state

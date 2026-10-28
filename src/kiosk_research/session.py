@@ -22,7 +22,7 @@ def run_session(root,config=None,resume_id=None,day_budget=None,target_day=None)
     print('Drive status:',run.directory/'progress.json',flush=True)
     def checkpoint(r):
         print('Day',r.state['day'],r.config.stage(r.state['day'])[1],flush=True)
-        cycle=r.config.train_days+r.config.validation_days+r.config.evaluation_days
+        cycle=r.config.cycle_days
         if r.config.continual and r.state['day']%cycle==0:
             summary=export(r)
             write_json(r.directory/'session_result.json',{'experiment_id':r.id,'summary':str(summary),

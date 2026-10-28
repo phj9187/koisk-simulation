@@ -1,5 +1,7 @@
 # AI 키오스크 · λ 조건부 파레토 연구
 
+**새 기본 λ 탐색은 2단계입니다.** α·β 기준마다 0·0.5·1로 넓게 학습하고, 동결 검증의 파레토 무릎점 후보 주변 세 값으로 집중 학습합니다. 추천 없음 비교와 공통 결정시간을 유지합니다. pilot은 5일, 연구·누적 주기는 35일입니다. [정확한 일정·구간 선택·재개 규칙](docs/pareto_two_stage_ko.md).
+
 **새 실험은 추천 없음·하루 고정 AI·고객별 AI의 3개 비교군을 사용합니다.** 탐색·결정시간을 동일한 공식으로 계산하고, 동결 평가 날짜에서 λ별 추천 없음 대비 개선량을 `baseline_comparison.csv`에 저장합니다. [함수 구조도·고객 선택식·λ 설명](docs/customer_choice_comparison_ko.md). 기존 603일 결과는 원래 가정으로 보존하며 새 비교 결과와 합치지 않습니다.
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/phj9187/koisk-simulation/blob/main/notebooks/run_actor_critic.ipynb)

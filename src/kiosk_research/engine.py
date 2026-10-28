@@ -30,6 +30,7 @@ class Experiment:
         self.identity={'runtime_versions':{'python':self.runtime['python'],'libraries':self.runtime['libraries']},'schema':4,'id':self.id,'experiment_id':self.id,'config':config.to_dict(),'source_sha256':source_hash(),'git_commit':git_version()['git_commit']}
         if config.algorithm=='actor_critic':self.identity['schema']=5
         if 'no_recommendation' in config.models:self.identity['schema']=6
+        if config.lambda_search=='pareto_two_stage':self.identity['schema']=7
         if resume:
             if not self.directory.is_dir():raise FileNotFoundError('experiment not found')
             with exclusive_lock(self.directory/'RUNNING.lock'):self._load()
@@ -50,6 +51,8 @@ class Experiment:
                     self.metadata['rng']='Seeded exogenous streams; private per-policy torch CPU RNG and Adam state saved in checkpoints.'
                 if 'no_recommendation' in config.models:
                     self.metadata['protocol']+='; unassisted customer-choice control; equal decision-time formula in every arm; no automatic migration of prior experiments'
+                if config.lambda_search=='pareto_two_stage':
+                    self.metadata['protocol']+='; coarse training / frozen selection / refined training / frozen validation / held-out evaluation; validation-only shared Pareto-knee grid per scenario'
                 self.state={'identity':self.identity,'day':0,'stop_reason':'','cases':cases,'stores':{},'parts':[],'raw_parts':[]}
                 write_json(self.directory/'metadata.json',self.metadata);self._save()
         self._frontier=self._signature()
@@ -115,7 +118,7 @@ class Experiment:
         write_json(self.root/'models'/self.id/'latest.json',model_state)
         if self.state['day']>0:
             rep,phase,offset=self.config.stage(self.state['day'])
-            if phase=='train' and offset==self.config.train_days:write_json(self.root/'models'/self.id/f'repetition_{rep:04d}_trained.json',model_state)
+            if phase=='train' and offset==self.config.training_end_offset:write_json(self.root/'models'/self.id/f'repetition_{rep:04d}_trained.json',model_state)
         self._progress(checkpoint_day=self.state['day'])
 
     def _progress(self,checkpoint_day=None,active_day=None,done=None,error=None):
@@ -123,12 +126,13 @@ class Experiment:
         try:previous=read_json(self.directory/'progress.json')
         except (OSError,ValueError):pass
         day=self.state['day']
-        total=None if self.config.repetitions is None else self.config.repetitions*(self.config.train_days+self.config.validation_days+self.config.evaluation_days)
+        total=None if self.config.repetitions is None else self.config.repetitions*self.config.cycle_days
         payload={'experiment_id':self.id,'updated_at_utc':datetime.now(timezone.utc).isoformat(),
                  'git_commit':self.identity['git_commit'],'source_sha256':self.identity['source_sha256'],
                  'day':day,'checkpoint_day':checkpoint_day if checkpoint_day is not None else previous.get('checkpoint_day',0),
                  'active_day':active_day,'completed_stores':done,'total_stores':self.config.stores,
                  'total_days':total,'phase':self.config.stage(active_day or max(1,day))[1],
+                 'search_stage':self.config.search_stage(active_day or max(1,day)),
                  'stop_reason':self.state['stop_reason'],'status':'error' if error else self.state['stop_reason'] or 'ready',
                  'error_type':error,'data_path':str(self.directory),
                  'learning_mode':'continual' if self.config.continual else 'independent_repetitions'}
@@ -141,6 +145,9 @@ class Experiment:
 
     def _next_day(self,progress=None,should_stop=None):
         day=self.state['day']+1
+        rep,_,offset=self.config.stage(day)
+        plan=self.state.get('lambda_search',{}).get(str(rep))
+        if self.config.search_stage(day)=='refine' and plan is None:raise ValueError('missing persisted selection plan')
         self._progress(active_day=day,done=0)
         folder=self.checkpoints/f'partial_{day:06d}';folder.mkdir(exist_ok=True)
         done={};tasks=[]
@@ -150,7 +157,9 @@ class Experiment:
                 saved=load_checkpoint(path)
                 if saved['identity']!=self.identity or saved['result']['day']!=day or saved['result']['id']!=case['id']:raise ValueError('partial identity mismatch')
                 done[case['id']]=saved['result']
-            except (OSError,ValueError,KeyError):tasks.append((self.config,case,self.state['stores'].get(str(case['id'])),day))
+            except (OSError,ValueError,KeyError):
+                task=(self.config,case,self.state['stores'].get(str(case['id'])),day)
+                tasks.append(task+(plan,) if self.config.lambda_search=='pareto_two_stage' else task)
         def commit(result):
             save_checkpoint(folder/f"store_{result['id']:04d}.json",{'identity':self.identity,'result':result});done[result['id']]=result
             self._progress(active_day=day,done=len(done))
@@ -174,11 +183,17 @@ class Experiment:
         self.state['parts'].append({'path':relative,'sha256':digest})
         if raw:self.state['raw_parts'].append(raw)
         self.state['stores']=stores;self.state['day']=day
+        if self.config.lambda_search=='pareto_two_stage' and offset==self.config.coarse_days+self.config.validation_days:
+            from kiosk_research.lambda_search import select_plan
+            validation=pd.concat([pd.read_parquet(self.directory/p['path']) for p in self.state['parts'][-self.config.validation_days:]],ignore_index=True)
+            selected=select_plan(validation,self.config,day)
+            self.state.setdefault('lambda_search',{})[str(rep)]=selected
+            write_json(self.directory/'lambda_search'/f'cycle_{rep:04d}.json',selected)
         if self.config.early_stopping and self.config.stage(day)[1]=='train':
             from kiosk_research.convergence import observe
             result=observe(self)
             self.state['convergence']=result
-            if result['converged']:self.state['stop_reason']='converged'
+            if result['converged'] and self.config.search_stage(day) in ('fixed','refine'):self.state['stop_reason']='converged'
         if (self.directory/'STOP').exists():self.state['stop_reason']='paused'
         elif self.config.complete(day):self.state['stop_reason']='completed'
         return True
@@ -211,7 +226,7 @@ class Experiment:
                     if target_day is not None and self.state['day']>=target_day:self.state['stop_reason']='target_reached'
                     if day_budget and count>=day_budget and not self.state['stop_reason']:self.state['stop_reason']='paused'
                     _,_,offset=self.config.stage(self.state['day'])
-                    boundary=offset in (self.config.train_days,self.config.train_days+self.config.validation_days)
+                    boundary=offset in self.config.phase_boundaries
                     if self.state['day']%self.config.checkpoint_every==0 or self.state['stop_reason'] or boundary:self._save()
                     if day_callback:day_callback(self)
             except BaseException as exc:

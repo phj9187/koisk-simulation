@@ -76,12 +76,19 @@ class LiveDashboard:
         frame=self.history if active is None or active.empty else active if previous.empty else pd.concat([previous,active],ignore_index=True)
         updated=datetime.now(timezone.utc).isoformat()
         status={'experiment_id':self.run.id,'updated_at_utc':updated,'deadline_utc':self.deadline,
+                'search_stage':self.run.config.search_stage(day or max(1,self.run.state['day'])),
                 'completed_day':self.run.state['day'],'active_day':day,'completed_stores':done,'total_stores':total,
                 'stop_reason':self.run.state['stop_reason'],'provisional_last_point':day is not None}
         title=f"{html.escape(self.run.id)} · 완료 {self.run.state['day']}일"
         if day is not None:title+=f' · {day}일 계산 중 {done}/{total}매장 (마지막 점 임시값)'
+        if self.run.config.lambda_search=='pareto_two_stage':title+=' · '+status['search_stage']
         content=[f'<h3>{title}</h3><p>갱신 UTC: {updated} · 중지 UTC: {html.escape(self.deadline or "별도 시각 제한 없음")}</p>',
                  '<p>매장 완료마다 갱신. 고객 점수·매장 점수·공통 보상, 범위 0~1. λ 평균은 기술통계이며 학습·검증·평가 날짜의 입력은 다릅니다. 엄밀한 모델 비교에는 동결 평가 결과를 사용하세요. 점 위에 마우스를 올리면 날짜·단계를 확인할 수 있습니다.</p>']
+        plans=self.run.state.get('lambda_search',{})
+        if plans:
+            latest=plans[max(plans,key=int)]
+            summary={name:choice['grid'] for name,choice in latest['choices'].items()}
+            content.append('<p>검증으로 선택한 2단계 λ: '+html.escape(json.dumps(summary,ensure_ascii=False))+'</p>')
         for i,scenario in enumerate(sorted(self.run.config.scenarios)):
             content.append(f'<details {"open" if i==0 else ""}><summary>{html.escape(scenario)}</summary>{chart(frame,scenario)}</details>')
         if self.run.state['stop_reason']:content.append('<p>중지 상태: '+html.escape(self.run.state['stop_reason'])+'</p>')

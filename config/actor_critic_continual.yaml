@@ -24,3 +24,5 @@ models:
 - fixed
 - contextual
 decision_time_mode: equal
+lambda_search: pareto_two_stage
+global_probe_every: 5

@@ -14,6 +14,9 @@ SCENARIOS = {
 class Config:
     algorithm: str = 'random_search'
     decision_time_mode: str = 'legacy'
+    lambda_search: str = 'fixed'
+    coarse_train_days: int | None = None
+    global_probe_every: int = 5
     seed: int = 42
     stores: int = 8
     source: str = 'synthetic'
@@ -46,6 +49,12 @@ class Config:
     def validate(self, require_source=True):
         if self.algorithm not in ('random_search','actor_critic'):raise ValueError('unknown algorithm')
         if self.decision_time_mode not in ('legacy','equal'):raise ValueError('unknown decision time mode')
+        if self.lambda_search not in ('fixed','pareto_two_stage'):raise ValueError('unknown lambda search')
+        if type(self.global_probe_every) is not int or self.global_probe_every<1:raise ValueError('invalid global probe interval')
+        if self.lambda_search=='pareto_two_stage':
+            if self.algorithm!='actor_critic' or self.train_days<2 or self.train_lambdas!=3:raise ValueError('two-stage search needs neural training, at least two train dates and three lambdas')
+            if self.coarse_train_days is not None and (type(self.coarse_train_days) is not int or not 1<=self.coarse_train_days<self.train_days):raise ValueError('invalid coarse training dates')
+            if not set(self.models)&{'fixed','contextual'}:raise ValueError('search needs a learned model')
         if 'no_recommendation' in self.models and self.decision_time_mode!='equal':raise ValueError('no-recommendation comparison requires equal decision times')
         for key in ('stores','train_days','validation_days','evaluation_days','checkpoint_every','workers','train_lambdas','checkpoint_keep'):
             if type(getattr(self,key)) is not int or getattr(self,key)<1:
@@ -85,13 +94,44 @@ class Config:
         return self
 
     def stage(self,day):
-        size=self.train_days+self.validation_days+self.evaluation_days
+        size=self.cycle_days
         rep,offset=divmod(day-1,size)
+        if self.lambda_search=='pareto_two_stage':
+            stage=self.search_stage(day)
+            return rep+1,'train' if stage in ('coarse','refine') else 'evaluation' if stage=='evaluation' else 'validation',offset+1
         phase='train' if offset<self.train_days else 'validation' if offset<self.train_days+self.validation_days else 'evaluation'
         return rep+1,phase,offset+1
 
     def complete(self,day):
-        return self.repetitions is not None and day>=self.repetitions*(self.train_days+self.validation_days+self.evaluation_days)
+        return self.repetitions is not None and day>=self.repetitions*self.cycle_days
+
+    @property
+    def cycle_days(self):
+        return self.train_days+self.validation_days*(2 if self.lambda_search=='pareto_two_stage' else 1)+self.evaluation_days
+
+    @property
+    def coarse_days(self):return self.coarse_train_days or self.train_days//2
+
+    @property
+    def training_end_offset(self):return self.train_days+(self.validation_days if self.lambda_search=='pareto_two_stage' else 0)
+
+    @property
+    def validation_end_offset(self):return self.training_end_offset+self.validation_days
+
+    @property
+    def phase_boundaries(self):
+        values=[self.training_end_offset,self.validation_end_offset]
+        if self.lambda_search=='pareto_two_stage':values += [self.coarse_days,self.coarse_days+self.validation_days]
+        return tuple(values)
+
+    def search_stage(self,day):
+        if self.lambda_search!='pareto_two_stage':return 'fixed'
+        offset=(day-1)%self.cycle_days
+        if offset<self.coarse_days:return 'coarse'
+        if offset<self.coarse_days+self.validation_days:return 'selection'
+        if offset<self.training_end_offset:return 'refine'
+        if offset<self.validation_end_offset:return 'validation'
+        return 'evaluation'
 
     def to_dict(self): return asdict(self)
 
