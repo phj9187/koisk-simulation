@@ -32,6 +32,7 @@ def fixed_probes(run,include_scores=False):
             contexts.append((Customer(taste,ps,ws,None,.5,max(.01,price*(1.05+i*.5)),purpose),shop))
         for name,scenario in sorted(run.config.scenarios.items()):
             for model in run.config.models:
+                if model=='no_recommendation':continue
                 keys.append(str(case['id'])+':'+name+':'+model)
                 policy=Policy.restore(run.state['stores'][str(case['id'])]['policies'][name+':'+model])
                 weights.append([policy.weights(person,shop,0.,lam) for person,shop in contexts for lam in (0.,.25,.5,.75,1.)])
@@ -43,7 +44,7 @@ def fixed_probes(run,include_scores=False):
                         for sample in range(3):
                             people=customers(30,random.Random(seed_for(run.config.seed,'convergence_people',case['id'],sample)),original)
                             result=simulate(people,original,policy,lam,scenario,
-                                seed_for(run.config.seed,'convergence_events',case['id'],sample),run.config.wait_scale)
+                                seed_for(run.config.seed,'convergence_events',case['id'],sample),run.config.wait_scale,decision_time_mode=run.config.decision_time_mode)
                             rewards.append(result['reward'])
                         values.append(float(np.mean(rewards)))
                     scores.append(values)

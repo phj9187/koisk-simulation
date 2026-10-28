@@ -1,5 +1,7 @@
 # AI 키오스크 · λ 조건부 파레토 연구
 
+**새 실험은 추천 없음·하루 고정 AI·고객별 AI의 3개 비교군을 사용합니다.** 탐색·결정시간을 동일한 공식으로 계산하고, 동결 평가 날짜에서 λ별 추천 없음 대비 개선량을 `baseline_comparison.csv`에 저장합니다. [함수 구조도·고객 선택식·λ 설명](docs/customer_choice_comparison_ko.md). 기존 603일 결과는 원래 가정으로 보존하며 새 비교 결과와 합치지 않습니다.
+
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/phj9187/koisk-simulation/blob/main/notebooks/run_actor_critic.ipynb)
 
 **새 기본 진입점은 Actor–Critic 신경망 실험입니다.** 개인별 모델은 고객 결과마다, 일별 모델은 하루 결과로 학습합니다. 두 모델 모두 5개 추천 가중치를 출력하고 기존 평가함수를 보상으로 사용합니다. [구조·학습·저장 설명](docs/actor_critic_ko.md). 기존 `run_automatic.ipynb`, `screening_*.yaml` 및 1000일 실행은 무작위 탐색 기준 실험으로 보존됩니다.

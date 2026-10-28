@@ -32,7 +32,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
     interval=w.BoundedIntText(value=2,min=1,max=1000,description='저장 주기')
     keep=w.BoundedIntText(value=2,min=2,max=20,description='복구 보관 수')
     cleanup=w.Checkbox(value=False,description='검증된 중복 자료 자동 정리')
-    models=w.SelectMultiple(options=['fixed','contextual'],value=('fixed','contextual'),description='비교 모델')
+    models=w.SelectMultiple(options=['no_recommendation','fixed','contextual'],value=('no_recommendation','fixed','contextual'),description='비교 모델')
     scenarios=w.SelectMultiple(options=list(SCENARIOS),value=tuple(SCENARIOS),description='만족도 가정')
     coefficients=w.Textarea(value=json.dumps(SCENARIOS,indent=2),description='가정 계수 JSON',layout=w.Layout(width='95%',height='170px'))
     logs=w.Checkbox(value=False,description='고객 상세 기록');plots=w.Checkbox(value=True,description='그래프 저장')
@@ -53,7 +53,7 @@ def controls(data_root,repository='phj9187/koisk-simulation'):
                     from kiosk_cloud.data import ensure_survey
                     ensure_survey(survey.value)
                 all_scenarios=json.loads(coefficients.value)
-                c=Config(algorithm=algorithm.value,seed=seed.value,stores=stores.value,source=source.value,survey_path=survey.value,
+                c=Config(algorithm=algorithm.value,decision_time_mode='equal',seed=seed.value,stores=stores.value,source=source.value,survey_path=survey.value,
                          visitors=visitors.value if override.value else None,train_days=train.value,validation_days=validation.value,
                          evaluation_days=evaluation.value,repetitions=repetitions.value or None,workers=workers.value,
                          checkpoint_every=interval.value,checkpoint_keep=keep.value,auto_cleanup=cleanup.value,models=list(models.value),scenarios={k:all_scenarios[k] for k in scenarios.value},raw_logs=logs.value,plots=plots.value)

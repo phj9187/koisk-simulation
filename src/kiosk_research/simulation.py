@@ -8,7 +8,8 @@ from kiosk_sim.arrival import assumed_purpose_shape
 from kiosk_research.policy import COMPONENTS,recommendation_features
 from kiosk_research.evaluation import affordability,wait_utility,ingredient_risks,score_outcomes
 
-def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw=False):
+def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw=False,decision_time_mode='legacy'):
+    if decision_time_mode not in ('legacy','equal'):raise ValueError('unknown decision time mode')
     store=copy.deepcopy(original);initial=dict(store.stock);rng=random.Random(seed);events=[]
     if hasattr(policy,'begin_episode'):policy.begin_episode(original,lam,scenario,len(people),hours)
     for c in people:
@@ -28,13 +29,17 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
         if not options:
             if raw:logs.append({'event':index,'served':False,'arrival':arrival,'reason':'no_feasible_menu'})
             continue
-        now=max(arrival,kiosk_free);w=policy.weights(c,store,now,lam)
-        suggestion=max(options,key=lambda m:sum(a*b for a,b in zip(w,recommendation_features(c,store,m,arrival,now,wait_scale,risks,risk_scale,max_margin,.8+.10*len(options)))))
+        now=max(arrival,kiosk_free)
+        common_decision=1.3+.45*len(options)
+        no_recommendation=policy.kind=='no_recommendation'
+        w=(0.,)*len(COMPONENTS) if no_recommendation else policy.weights(c,store,now,lam)
+        predicted_decision=common_decision if decision_time_mode=='equal' else .8+.10*len(options)
+        suggestion=None if no_recommendation else max(options,key=lambda m:sum(a*b for a,b in zip(w,recommendation_features(c,store,m,arrival,now,wait_scale,risks,risk_scale,max_margin,predicted_decision))))
         own=max(options,key=lambda m:private(c,m,now)+.16*math.log(max(1e-9,shocks[m.name])))
-        gain=private(c,suggestion,now)-private(c,own,now)
-        probability=c.openness/(1.+math.exp(-max(-50.,min(50.,3.*(gain+.25)))))
+        gain=0. if no_recommendation else private(c,suggestion,now)-private(c,own,now)
+        probability=0. if no_recommendation else c.openness/(1.+math.exp(-max(-50.,min(50.,3.*(gain+.25)))))
         took=u<probability;picked=suggestion if took else own
-        decision=(.8+.10*len(options)) if took else (1.3+.45*len(options))
+        decision=common_decision if decision_time_mode=='equal' else (.8+.10*len(options)) if took else common_decision
         order=now+decision;kiosk_free=order
         cook=min(range(store.cooks),key=lambda k:store.cook_free_at[k])
         finish=max(order,store.cook_free_at[cook])+picked.cook_minutes
@@ -51,7 +56,8 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
             reward=score_outcomes(cumulative,scenario,lam)['reward']
             policy.feedback(reward-previous_reward);previous_reward=reward
         for i,v in enumerate(w):weight_sum[i]+=v
-        if raw:logs.append({'event':index,'served':True,'arrival':arrival,'chosen':picked.name,'recommended':suggestion.name,
+        if raw:logs.append({'event':index,'served':True,'arrival':arrival,'chosen':picked.name,'recommended':None if suggestion is None else suggestion.name,
+                            'own_choice':own.name,'decision_minutes':decision,'acceptance_probability':probability,'menu_changed':picked.name!=own.name,
                             'accepted':took,'taste_fit':fit,'affordability':affordable,'wait_component':wait_value,
                             'total_wait':wait,'stock_after':dict(store.stock),'weights':list(w)})
     risk=risks

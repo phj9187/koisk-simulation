@@ -98,6 +98,7 @@ scenarios:
     - 0.0
     - 1.0
 models:
+- no_recommendation
 - fixed
 - contextual
 sigma: 0.5
@@ -134,3 +135,4 @@ cross_evaluation:
     - 0.7
     - 0.3
 algorithm: actor_critic
+decision_time_mode: equal

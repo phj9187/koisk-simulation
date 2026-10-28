@@ -13,6 +13,7 @@ SCENARIOS = {
 @dataclass
 class Config:
     algorithm: str = 'random_search'
+    decision_time_mode: str = 'legacy'
     seed: int = 42
     stores: int = 8
     source: str = 'synthetic'
@@ -44,6 +45,8 @@ class Config:
 
     def validate(self, require_source=True):
         if self.algorithm not in ('random_search','actor_critic'):raise ValueError('unknown algorithm')
+        if self.decision_time_mode not in ('legacy','equal'):raise ValueError('unknown decision time mode')
+        if 'no_recommendation' in self.models and self.decision_time_mode!='equal':raise ValueError('no-recommendation comparison requires equal decision times')
         for key in ('stores','train_days','validation_days','evaluation_days','checkpoint_every','workers','train_lambdas','checkpoint_keep'):
             if type(getattr(self,key)) is not int or getattr(self,key)<1:
                 raise ValueError(f'{key} must be a positive integer')
@@ -67,7 +70,8 @@ class Config:
         if self.source=='synthetic' and self.stores%8: raise ValueError('synthetic stores must be a multiple of 8')
         if self.source=='empirical' and require_source and not Path(self.survey_path).is_file():
             raise ValueError('verified survey file required; no synthetic fallback')
-        if not self.models or len(self.models)!=len(set(self.models)) or not set(self.models)<={'fixed','contextual'}: raise ValueError('invalid models')
+        if not self.models or len(self.models)!=len(set(self.models)) or not set(self.models)<={'fixed','contextual','no_recommendation'}: raise ValueError('invalid models')
+        if self.early_stopping and not set(self.models)&{'fixed','contextual'}:raise ValueError('convergence needs a learned model')
         for grid in (self.validation_lambdas,self.evaluation_lambdas):
             if not grid or len(set(grid))!=len(grid) or any(not math.isfinite(x) or not 0<=x<=1 for x in grid): raise ValueError('invalid lambda grid')
         if not set(self.validation_lambdas)<=set(self.evaluation_lambdas): raise ValueError('final grid must include validation grid for checking selected policies')

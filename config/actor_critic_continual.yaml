@@ -19,3 +19,8 @@ workers: 1
 raw_logs: false
 plots: true
 algorithm: actor_critic
+models:
+- no_recommendation
+- fixed
+- contextual
+decision_time_mode: equal

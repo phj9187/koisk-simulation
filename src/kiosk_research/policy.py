@@ -18,6 +18,7 @@ class Policy:
 
     @classmethod
     def initial(cls,kind):
+        if kind=='no_recommendation':return cls(kind,[])
         if kind not in ('fixed','contextual'): raise ValueError('unknown model')
         return cls(kind,[[0.]*(3 if kind=='fixed' else 3*len(CONTEXT)) for _ in COMPONENTS])
 
@@ -37,6 +38,9 @@ class Policy:
 
     @classmethod
     def restore(cls,state):
+        if state.get('kind')=='no_recommendation':
+            if state.get('theta')!=[]:raise ValueError('baseline must have no learned parameters')
+            return cls.initial('no_recommendation')
         if state.get('algorithm')=='actor_critic':
             from kiosk_research.actor_critic import ActorCriticPolicy
             return ActorCriticPolicy.restore(state)

@@ -29,7 +29,7 @@ def chart(frame,scenario):
         for tick in (0,.25,.5,.75,1.):
             y=top+(1-tick)*height
             pieces.append(f'<path d="M{left},{y}h{width}" stroke="#ddd"/><text x="{left-30}" y="{y+4}" font-size="11">{tick:g}</text>')
-        for model,color in [('fixed','#315be8'),('contextual','#e44b7a')]:
+        for model,color in [('fixed','#315be8'),('contextual','#e44b7a'),('no_recommendation','#168461')]:
             data=source[source.model.eq(model)].sort_values('day')
             coords=[(left+(float(r.day)-1)/max(1,xmax-1)*width,top+(1-float(getattr(r,metric)))*height) for r in data.itertuples()]
             if coords:
@@ -39,7 +39,7 @@ def chart(frame,scenario):
                     phase=html.escape(str(r.phase))
                     pieces.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="3" fill="{color}"><title>Day {r.day}, {phase}: {getattr(r,metric):.5f}</title></circle>')
         pieces.append(f'<text x="{left}" y="222" font-size="11">Day 1</text><text x="{left+width-48}" y="222" font-size="11">Day {xmax}</text>')
-    pieces.append('<text x="42" y="248" fill="#315be8" font-size="13">fixed: 일별</text><text x="220" y="248" fill="#e44b7a" font-size="13">contextual: 개인별</text></svg>')
+    pieces.append('<text x="42" y="248" fill="#315be8" font-size="13">fixed: 일별</text><text x="220" y="248" fill="#e44b7a" font-size="13">contextual: 개인별</text><text x="460" y="248" fill="#168461" font-size="13">no_recommendation: 추천 없음</text></svg>')
     return ''.join(pieces)
 
 
@@ -80,7 +80,7 @@ class LiveDashboard:
                 'stop_reason':self.run.state['stop_reason'],'provisional_last_point':day is not None}
         title=f"{html.escape(self.run.id)} · 완료 {self.run.state['day']}일"
         if day is not None:title+=f' · {day}일 계산 중 {done}/{total}매장 (마지막 점 임시값)'
-        content=[f'<h3>{title}</h3><p>갱신 UTC: {updated} · 중지 UTC: {html.escape(self.deadline)}</p>',
+        content=[f'<h3>{title}</h3><p>갱신 UTC: {updated} · 중지 UTC: {html.escape(self.deadline or "별도 시각 제한 없음")}</p>',
                  '<p>매장 완료마다 갱신. 고객 점수·매장 점수·공통 보상, 범위 0~1. λ 평균은 기술통계이며 학습·검증·평가 날짜의 입력은 다릅니다. 엄밀한 모델 비교에는 동결 평가 결과를 사용하세요. 점 위에 마우스를 올리면 날짜·단계를 확인할 수 있습니다.</p>']
         for i,scenario in enumerate(sorted(self.run.config.scenarios)):
             content.append(f'<details {"open" if i==0 else ""}><summary>{html.escape(scenario)}</summary>{chart(frame,scenario)}</details>')

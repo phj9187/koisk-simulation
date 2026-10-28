@@ -4,7 +4,7 @@
 <main><h1>모델 평가와 추천 가중치</h1><p id="summary"></p>
 <section><label>매장 <select id="store"></select></label><label>평가 기준 <select id="scenario"></select></label><label>모델 <select id="model"></select></label></section>
 <section><h2>평가 점수와 λ의 관계</h2><p>가장 최근의 동결 평가 주기에서 얻은 고객 점수 C, 가게 점수 S, 종합점수 R = λC + (1−λ)S입니다. λ가 바뀌면 추천도 바뀌므로 직선일 필요는 없습니다.</p><canvas id="score" width="1100" height="330"></canvas><div id="scorelegend" class="legend"></div></section>
-<section><h2>학습한 추천 가중치 함수</h2><p>마지막 저장 모델에 같은 기준 고객·재고·혼잡 상태를 입력한 결과입니다. 평가 기준 α·β는 고정된 가정이며 아래의 학습 가중치 w와 다릅니다.</p><canvas id="weight" width="1100" height="330"></canvas><div id="weightlegend" class="legend"></div></section>
+<section><h2>학습한 추천 가중치 함수</h2><p>마지막 저장 모델에 같은 기준 고객·재고·혼잡 상태를 입력한 결과입니다. 평가 기준 α·β는 고정된 가정이며 아래의 학습 가중치 w와 다릅니다. 추천 없음(no_recommendation)은 학습 가중치가 없으므로 이 그래프에 선을 그리지 않습니다.</p><canvas id="weight" width="1100" height="330"></canvas><div id="weightlegend" class="legend"></div></section>
 <section><h2>파일</h2><p><a href="evaluation_functions.csv">매장별 평가 곡선 CSV</a> · <a href="evaluation_learning_curves.csv">날짜별 평가 점수 CSV</a> · <a href="recommendation_weight_functions.csv">추천 가중치 함수 CSV</a></p><p>각 평가 기준의 evaluation_*.png는 모델별 선그래프입니다. 날짜별 그래프는 입력·고객이 바뀌는 기술통계이므로 수렴 판정에 직접 쓰지 않습니다. 모든 결과는 가상 시뮬레이션 결과입니다.</p></section></main>
 <script id="chartdata" type="application/json">__DATA__</script>
 <script>

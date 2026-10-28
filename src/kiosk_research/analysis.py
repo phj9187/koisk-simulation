@@ -117,7 +117,9 @@ def function_curves(experiment):
         for case in experiment.state['cases']:
             store=restore_store(case['template']);saved=state['stores'][str(case['id'])]
             for key,value in saved['policies'].items():
-                scenario,model=key.split(':');policy=Policy.restore(value)
+                scenario,model=key.split(':')
+                if model=='no_recommendation':continue
+                policy=Policy.restore(value)
                 for lam in experiment.config.evaluation_lambdas:
                     weights=policy.weights(c,store,0.,lam)
                     row={'repetition':rep,'store_id':case['id'],'scenario':scenario,'model':model,'lambda_value':lam}
@@ -149,6 +151,7 @@ def plots(frame,points,statistics,curves,target,identity,suffix=""):
         trend=v.groupby('day').reward.mean();axes[0].plot(trend.index,trend.values,'.-',label=model+'/'+phase)
     axes[0].set(title='Mean sampled-lambda reward (descriptive)',xlabel='Day')
     for model,v in frame[frame.eligible].groupby('model'):
+        if model=='no_recommendation':continue
         for key in [k for k in frame if k.startswith('weight_')]:
             trend=v.groupby('day')[key].mean();axes[1].plot(trend.index,trend.values,label=model+'/'+key[7:])
     axes[1].set(title='Actually applied mean weights',xlabel='Day')
@@ -176,6 +179,9 @@ def export(experiment,target_root=None):
     completed=list(range(1,experiment.state['day']//size+1))
     validation_complete=[r for r in range(1,experiment.config.stage(experiment.state['day'])[0]+1) if (r-1)*size+experiment.config.train_days+experiment.config.validation_days<=experiment.state['day']]
     final=frame[frame.repetition.isin(completed)];points=aggregate(final);stores=aggregate(final,True)
+    from kiosk_research.baseline import compare_baseline
+    baseline=compare_baseline(final,experiment.config.seed,independent=not experiment.config.continual)
+    atomic_bytes(target/'baseline_comparison.csv',baseline.to_csv(index=False).encode('utf-8'))
     validation=aggregate(frame[frame.repetition.isin(validation_complete)],True,'validation');curves=function_curves(experiment)
     for name,table in [('summary.csv',points),('store_frontiers.csv',stores),('validation.csv',validation),('function_curves.csv',curves),('store_effects.csv',store_effects(stores,experiment.state['cases']))]:atomic_bytes(target/name,table.to_csv(index=False).encode('utf-8'))
     from kiosk_research.cross_evaluation import cross_evaluate
@@ -226,5 +232,7 @@ Synthetic outcomes, not measured human satisfaction.
         text=text.replace('Model dimensions: fixed=15, contextual=135.','Model dimensions: both variants have Actor=773 and Critic=705 neural parameters (1,478 total).')
         text=text.replace('Initial uniform policies are evaluated','Initial uniform-mean neural policies are evaluated')
         text += '\nActor-Critic: contextual TD(0) customer updates; fixed daily batch updates. Gamma=1 within a finite day. Validation and evaluation use frozen mean policies. Training rows contain on-policy outcomes; use held-out dates for model comparison. Adam and private RNG states are checkpointed.\n'
+    if 'no_recommendation' in experiment.config.models:
+        text += '\nUnassisted customer-choice control: baseline_comparison.csv reports paired evaluation effects per scenario and lambda. All arms use the same decision-time formula. Baseline has no neural parameters, optimizer updates or recommendation weights. Independent-repetition confidence intervals require at least five independent repetitions; continual cycles remain descriptive.\n'
     atomic_bytes(target/'report.md',text.encode('utf-8'));write_json(target/'complete.json',completion)
     return target

@@ -50,7 +50,9 @@ def export_lines(run,target=None):
     for case in run.state['cases']:
         shop=restore_store(case['template'])
         for key,value in run.state['stores'][str(case['id'])]['policies'].items():
-            scenario,model=key.split(':');policy=Policy.restore(value)
+            scenario,model=key.split(':')
+            if model=='no_recommendation':continue
+            policy=Policy.restore(value)
             for lam in np.linspace(0,1,101):
                 rows.append({'store_id':case['id'],'scenario':scenario,'model':model,'lambda_value':float(lam),
                     **dict(zip(COMPONENTS,policy.weights(customer,shop,0.,float(lam))))})
