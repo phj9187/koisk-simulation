@@ -102,13 +102,16 @@ class LiveDashboard:
             self.handle.update(HTML(body))
 
 
-def run_live(root,config,deadline_utc,resume_id=None,target_day=None,display=True):
+def run_live(root,config,deadline_utc,resume_id=None,target_day=None,display=True,cards=True):
     if config.algorithm!='actor_critic':raise ValueError('neural experiment required')
     run=Experiment.resume(root,resume_id) if resume_id else Experiment(config,root)
     if run.config.algorithm!='actor_critic':raise ValueError('cannot resume legacy random search here')
     write_json(run.directory/'execution_control.json',{'deadline_utc':deadline_utc,'target_day':target_day,'stop_boundary':'store; preserve partial day','git_commit':run.identity['git_commit']})
-    print('Experiment:',run.id,'\nDeadline UTC:',deadline_utc,'\nLive dashboard:',run.directory/'live/index.html',flush=True)
-    dashboard=LiveDashboard(run,deadline_utc,display)
+    print('Experiment:',run.id,'\nDeadline UTC:',deadline_utc,'\nLive dashboard:',run.directory/('live/model_board.html' if cards else 'live/index.html'),flush=True)
+    if cards:
+        from kiosk_research.model_board import ModelBoard
+        dashboard=ModelBoard(run,deadline_utc,display)
+    else:dashboard=LiveDashboard(run,deadline_utc,display)
     try:
         run.run(progress=dashboard.progress,day_callback=dashboard.completed,target_day=target_day,deadline_utc=deadline_utc)
     finally:

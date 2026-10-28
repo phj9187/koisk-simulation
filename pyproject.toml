@@ -11,4 +11,4 @@ kiosk-research = "kiosk_research.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 [tool.setuptools.package-data]
-kiosk_research = ["linecharts_template.html"]
+kiosk_research = ["linecharts_template.html", "model_board.html"]
