@@ -1,8 +1,11 @@
 seed: 42
 stores: 8
-source: synthetic
-survey_path: ''
-visitors: 5
+source: empirical
+survey_path: /content/drive/MyDrive/AI-Kiosk-Data/raw_data/source_2025.xlsx
+visitors: null
+visitor_variation: poisson
+sales_profile_path: /content/drive/MyDrive/AI-Kiosk-Data/raw_data/seoul_sales.csv
+sales_quarter: ''
 train_days: 2
 validation_days: 1
 evaluation_days: 1

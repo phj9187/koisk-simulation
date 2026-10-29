@@ -22,6 +22,10 @@ class Config:
     source: str = 'synthetic'
     survey_path: str = ''
     visitors: int | None = 30
+    visitor_variation: str = 'fixed'
+    sales_profile_path: str = ''
+    sales_quarter: str = ''
+    arrival_start_hour: int = 11
     train_days: int = 10
     validation_days: int = 2
     evaluation_days: int = 3
@@ -76,6 +80,9 @@ class Config:
         if self.convergence_probe_every>self.convergence_window//2:raise ValueError('probe interval too long')
         if not math.isfinite(self.convergence_tolerance) or not 0<self.convergence_tolerance<=.1:raise ValueError('invalid convergence tolerance')
         if self.source not in ('synthetic','empirical'): raise ValueError('unknown source')
+        if self.visitor_variation not in ('fixed','poisson'):raise ValueError('unknown visitor variation')
+        if type(self.arrival_start_hour) is not int or not 0<=self.arrival_start_hour<=23:raise ValueError('invalid arrival start hour')
+        if self.sales_profile_path and require_source and not Path(self.sales_profile_path).is_file():raise ValueError('sales profile file not found')
         if self.source=='synthetic' and self.stores%8: raise ValueError('synthetic stores must be a multiple of 8')
         if self.source=='empirical' and require_source and not Path(self.survey_path).is_file():
             raise ValueError('verified survey file required; no synthetic fallback')

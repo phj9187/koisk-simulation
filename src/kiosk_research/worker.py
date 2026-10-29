@@ -7,6 +7,7 @@ from kiosk_sim.generators import customers
 from kiosk_sim.models import Menu,Store
 from kiosk_research.policy import Policy,COMPONENTS
 from kiosk_research.simulation import simulate
+from kiosk_research.arrivals import visitor_count,start_hour,purpose_profiles
 
 def seed_for(seed,*parts):return int.from_bytes(hashlib.sha256(repr((seed,*parts)).encode()).digest()[:8],'big')
 
@@ -17,7 +18,9 @@ def store_day(task):
     template=restore_store(case['template']);store=copy.deepcopy(template)
     rng=random.Random(seed_for(config.seed,'stock',day,case['id']))
     store.stock={k:max(0,round(v*rng.uniform(.65,1.10))) for k,v in template.stock.items()};store.cook_free_at=[0.]*store.cooks
-    visitors=config.visitors if config.visitors is not None else round(float(case['features']['visitor_mean']))
+    visitors=visitor_count(config,case,seed_for(config.seed,'visitors',day,case['id']))
+    # The daily policy sees only the store's mean, not the realized count, so no future information leaks in.
+    expected=config.visitors if config.visitors is not None else round(float(case['features']['visitor_mean']))
     people=customers(visitors,random.Random(seed_for(config.seed,'customers',day,case['id'])),template) if visitors else []
     event_seed=seed_for(config.seed,'events',day,case['id'])
     if phase=='train':
@@ -25,7 +28,8 @@ def store_day(task):
     else:lambdas=config.validation_lambdas if phase=='validation' else config.evaluation_lambdas
     hours=case['features'].get('opening_hours');hours=int(hours) if hours and 1<=hours<=24 else 8
     policies={};steps={};rows=[];logs=[];inventory={};fresh=previous is None or (previous['repetition']!=rep and not config.continual)
-    def episode(policy,lam,raw=False):return simulate(people,store,policy,lam,scenario,event_seed,config.wait_scale,hours,raw,config.decision_time_mode)
+    profiles=purpose_profiles(config,hours);opening=start_hour(config,hours)
+    def episode(policy,lam,raw=False):return simulate(people,store,policy,lam,scenario,event_seed,config.wait_scale,hours,raw,config.decision_time_mode,profiles,opening)
     for scenario_name,scenario in sorted(config.scenarios.items()):
         schedule='fixed_protocol'
         if config.lambda_search=='pareto_two_stage' and config.search_stage(day) in ('coarse','selection','refine'):
@@ -38,7 +42,7 @@ def store_day(task):
                 def initial_policy():return Policy.initial('no_recommendation')
             elif config.algorithm=='actor_critic':
                 from kiosk_research.actor_critic import ActorCriticPolicy
-                def initial_policy():return ActorCriticPolicy(model,scenario,seed_for(config.seed,'neural',case['id'],scenario_name),visitors,hours)
+                def initial_policy():return ActorCriticPolicy(model,scenario,seed_for(config.seed,'neural',case['id'],scenario_name),expected,hours)
             else:
                 def initial_policy():return Policy.initial(model)
             incumbent=initial_policy() if fresh else Policy.restore(previous['policies'][key])

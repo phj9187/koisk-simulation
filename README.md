@@ -1,5 +1,9 @@
 # AI 키오스크 · λ 조건부 파레토 연구
 
+**실제 매장 자료를 다시 씁니다.** `actor_critic_*.yaml`은 KREI 2025 원자료의 LHS 표본 매장(pilot 8곳, research·continual 64곳)을 쓰고, 매장별 평균 방문자 수를 중심으로 날짜마다 포아송 변동을 줍니다. 서울시 상권분석서비스 추정매출-상권 CSV를 Drive `AI-Kiosk-Data/raw_data/seoul_sales.csv`에 올리면 실제 시간대별 매출 패턴으로 손님이 도착합니다. 두 원자료가 없으면 이 설정은 실행을 거부하며, 로컬에서 쓰려면 `survey_path`·`sales_profile_path`를 바꾸세요. 새 설정 키의 기본값(`visitor_variation: fixed`, 매출 자료 없음)은 예전 동작과 같아서 기존 실험은 같은 결과로 재개됩니다.
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/phj9187/koisk-simulation/blob/main/notebooks/run_actor_critic_live.ipynb) 실시간 노트북은 항상 이 배지로 열고, 노트북을 고쳤다면 Colab의 **파일 → GitHub에 사본 저장**으로 `main`의 같은 경로에 저장하세요.
+
 **새 기본 λ 탐색은 2단계입니다.** α·β 기준마다 0·0.5·1로 넓게 학습하고, 동결 검증의 파레토 무릎점 후보 주변 세 값으로 집중 학습합니다. 추천 없음 비교와 공통 결정시간을 유지합니다. pilot은 5일, 연구·누적 주기는 35일입니다. [정확한 일정·구간 선택·재개 규칙](docs/pareto_two_stage_ko.md).
 
 **새 실험은 추천 없음·하루 고정 AI·고객별 AI의 3개 비교군을 사용합니다.** 탐색·결정시간을 동일한 공식으로 계산하고, 동결 평가 날짜에서 λ별 추천 없음 대비 개선량을 `baseline_comparison.csv`에 저장합니다. [함수 구조도·고객 선택식·λ 설명](docs/customer_choice_comparison_ko.md). 기존 603일 결과는 원래 가정으로 보존하며 새 비교 결과와 합치지 않습니다.

@@ -8,12 +8,12 @@ from kiosk_sim.arrival import assumed_purpose_shape
 from kiosk_research.policy import COMPONENTS,recommendation_features
 from kiosk_research.evaluation import affordability,wait_utility,ingredient_risks,score_outcomes
 
-def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw=False,decision_time_mode='legacy'):
+def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw=False,decision_time_mode='legacy',purpose_profiles=None,start_hour=11):
     if decision_time_mode not in ('legacy','equal'):raise ValueError('unknown decision time mode')
     store=copy.deepcopy(original);initial=dict(store.stock);rng=random.Random(seed);events=[]
     if hasattr(policy,'begin_episode'):policy.begin_episode(original,lam,scenario,len(people),hours)
     for c in people:
-        profile=assumed_purpose_shape(c.purpose,11,int(hours));cdf=list(accumulate(profile))
+        profile=purpose_profiles[c.purpose] if purpose_profiles else assumed_purpose_shape(c.purpose,start_hour,int(hours));cdf=list(accumulate(profile))
         draw=rng.random()*cdf[-1];hour=next(i for i,v in enumerate(cdf) if draw<=v)
         arrival=(hour+rng.random())*60.;shocks={m.name:rng.gammavariate(1.,1.) for m in store.menus}
         events.append((arrival,c,shocks,rng.random()))
