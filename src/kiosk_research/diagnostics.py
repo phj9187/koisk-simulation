@@ -14,7 +14,7 @@ def diagnose(config,case,trained,scenario,day,name,repetition):
     from kiosk_research.actor_critic import ActorCriticPolicy
     rep=repetition if config.repetition_seeds and not config.continual else 1
     seed=seed_for(config.seed,'neural',case['id'],name,rep)
-    initial=ActorCriticPolicy(trained.kind,scenario,seed) if config.algorithm=='actor_critic' else Policy.initial(trained.kind)
+    initial=ActorCriticPolicy(trained.kind,scenario,seed,learning=config.learning) if config.algorithm=='actor_critic' else Policy.initial(trained.kind)
     arms={'initial':initial,'trained':trained,'no_recommendation':Policy.initial('no_recommendation'),'rule':RulePolicy()}
     records=[]
     for lam in config.evaluation_lambdas:

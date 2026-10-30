@@ -50,12 +50,15 @@ class Config:
     convergence_tolerance: float = .01
     convergence_probe_every: int = 5
     realism: dict = field(default_factory=dict)
+    learning: dict = field(default_factory=dict)
     diagnostics: bool = False
     repetition_seeds: bool = True
 
     def validate(self, require_source=True):
         from kiosk_research.realism import options
         settings=options(self)
+        from kiosk_research.actor_critic import learning_options
+        learning_options(self.learning)
         if settings.population_path and require_source and not Path(settings.population_path).is_file():raise ValueError('population file not found')
         if settings.monthly_profile_path and require_source:
             from kiosk_research.realism import monthly_multiplier

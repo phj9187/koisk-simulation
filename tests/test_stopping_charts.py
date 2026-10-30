@@ -49,10 +49,10 @@ class StoppingTests(unittest.TestCase):
             c=small(continual=True,early_stopping=True,train_days=1000,repetitions=None)
             def make(day):return SimpleNamespace(directory=Path(root),state={'day':day},config=c,identity={'id':'monitor'})
             unstable=False
-            def probes(run,include_scores=False):
+            def probes(run,include_scores=False,initial=False):
                 weights=np.full((2,3,5),.2)
                 if unstable:weights[1,0,0]+=.04;weights[1,0,1]-=.04
-                return ['p0','p1'],weights,np.full((2,3),.5) if include_scores else np.array([])
+                return ['p0','p1'],weights,np.full((2,3),.4 if initial else .5) if include_scores else np.array([])
             with patch('kiosk_research.convergence.fixed_probes',side_effect=probes):
                 for day in range(1,105):
                     result=observe(make(day));self.assertFalse(result['converged'])

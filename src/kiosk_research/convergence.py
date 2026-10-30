@@ -21,7 +21,7 @@ def training_dates(config,day):
     return full*config.train_days+min(offset,config.train_days)
 
 
-def fixed_probes(run,include_scores=False):
+def fixed_probes(run,include_scores=False,initial=False):
     keys=[];weights=[];scores=[]
     for case in run.state['cases']:
         original=restore_store(case['template'])
@@ -38,6 +38,12 @@ def fixed_probes(run,include_scores=False):
                 if model=='no_recommendation':continue
                 keys.append(str(case['id'])+':'+name+':'+model)
                 policy=Policy.restore(run.state['stores'][str(case['id'])]['policies'][name+':'+model])
+                if initial:
+                    if run.config.algorithm=='actor_critic':
+                        from kiosk_research.actor_critic import ActorCriticPolicy
+                        rep=run.config.stage(run.state['day'])[0] if run.config.repetition_seeds and not run.config.continual else 1
+                        policy=ActorCriticPolicy(model,scenario,seed_for(run.config.seed,'neural',case['id'],name,rep),learning=run.config.learning)
+                    else:policy=Policy.initial(model)
                 if hasattr(policy,'expected_visitors'):
                     from kiosk_research.realism import options,monthly_multiplier
                     from kiosk_research.arrivals import sales_day_multiplier
@@ -102,6 +108,15 @@ def observe(run):
         'tolerance':run.config.convergence_tolerance,'converged':False,'status':'warming_up',
         'interpretation':'fixed-probe functional stability; not optimality or real-world accuracy'}
     result['probe_protocol']='shared environment builder; fixed seed/sample/calendar/inventory per probe, independent of training dates'
+    if with_scores:
+        initial_scores=fixed_probes(run,include_scores=True,initial=True)[2]
+        gains=(scores-initial_scores).mean(axis=1)
+        result['initial_probe_mean']=initial_scores.mean(axis=1).tolist()
+        result['trained_probe_mean']=scores.mean(axis=1).tolist()
+        result['mean_gain_vs_initial']=gains.tolist()
+        result['improved_policies']=int((gains>1e-6).sum())
+        result['all_policies_improved']=bool((gains>1e-6).all())
+        result['improvement_interpretation']='paired fixed-probe descriptive gain > 1e-6; not statistical significance'
     counts=[h[0]['training_date'] for h in history]
     score_rows=[h for h in history if h[0]['has_scores']]
     enough=(counts==list(range(count-window,count+1)) and with_scores and score_rows
@@ -110,7 +125,8 @@ def observe(run):
         drift,score_range=stability_metrics([h[1] for h in history],[h[2] for h in score_rows])
         tolerance=run.config.convergence_tolerance
         flags=(drift<=tolerance)&(score_range<=tolerance)
-        result.update(status='converged' if flags.all() else 'monitoring',converged=bool(flags.all()),
+        result.update(status=('converged' if result.get('all_policies_improved') else 'stable_without_improvement') if flags.all() else 'monitoring',
+            converged=bool(flags.all() and result.get('all_policies_improved')),functionally_stable=bool(flags.all()),
             max_weight_tv_bound=float(drift.max()),max_probe_score_range=float(score_range.max()),
             stable_policies=int(flags.sum()),total_policies=len(keys),
             policies={k:{'weight_tv_bound':float(a),'score_range':float(b),'stable':bool(ok)}

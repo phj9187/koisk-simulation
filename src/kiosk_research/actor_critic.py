@@ -37,15 +37,35 @@ def unpack(value):
     return value
 
 
+def learning_options(values):
+    import math
+    defaults=dict(initial_alpha=1.1931471805599454,actor_lr=.0003,critic_lr=.001,
+                  advantage_scale=1.,fixed_candidates=1,paired_baseline=False,normalize_advantage=False)
+    if set(values)-set(defaults):raise ValueError('unknown learning option')
+    defaults.update(values)
+    for key in ('initial_alpha','actor_lr','critic_lr','advantage_scale'):
+        if not math.isfinite(defaults[key]) or defaults[key]<=0:raise ValueError('invalid '+key)
+    if defaults['initial_alpha']<=.5:raise ValueError('initial_alpha must exceed .5')
+    n=defaults['fixed_candidates']
+    if type(n) is not int or not 1<=n<=64:raise ValueError('invalid fixed_candidates')
+    for key in ('paired_baseline','normalize_advantage'):
+        if type(defaults[key]) is not bool:raise ValueError('invalid '+key)
+    if defaults['paired_baseline'] and n<2:raise ValueError('paired baseline requires at least two candidates')
+    return defaults
+
+
 class ActorCriticPolicy:
     algorithm = 'actor_critic'
     # Both variants have exactly the same parameter count. Daily inputs contain
     # expected customer features, never the actual future customer list.
     input_size = 25
 
-    def __init__(self, kind, scenario, seed=42, expected_visitors=30, hours=8):
+    def __init__(self, kind, scenario, seed=42, expected_visitors=30, hours=8, learning=None):
         if kind not in ('fixed', 'contextual'):
             raise ValueError('unknown model')
+        self.learning=learning_options(learning or {})
+        self.actor_baselines=[]
+        self.advantage_second_moment=1.
         self.kind, self.scenario = kind, copy.deepcopy(scenario)
         self.expected_visitors, self.hours = expected_visitors, hours
         with torch.random.fork_rng(devices=[]):
@@ -54,10 +74,10 @@ class ActorCriticPolicy:
                 return nn.Sequential(nn.Linear(self.input_size,16),nn.Tanh(),nn.Linear(16,16),nn.Tanh(),nn.Linear(16,outputs))
             self.actor, self.critic = network(5), network(1)
             nn.init.zeros_(self.actor[-1].weight)
-            nn.init.zeros_(self.actor[-1].bias)
+            nn.init.constant_(self.actor[-1].bias,0. if self.learning['initial_alpha']==1.1931471805599454 else __import__('math').log(__import__('math').expm1(self.learning['initial_alpha']-.5)))
             self.rng = torch.get_rng_state().clone()
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=1e-3)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.learning['actor_lr'])
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.learning['critic_lr'])
         self.updates = 0
         self.training = False
         self.pending = None
@@ -96,7 +116,12 @@ class ActorCriticPolicy:
         actions = torch.stack([s[1] for s in samples]).detach()
         targets = torch.tensor([s[2] for s in samples],dtype=torch.float32)
         values = self.critic(observations).squeeze(-1)
-        advantage = (targets-values).detach()
+        base=torch.tensor(self.actor_baselines,dtype=torch.float32) if self.actor_baselines else values.detach()
+        raw_advantage=(targets-base).detach()
+        scale=max(self.advantage_second_moment,1e-8)**.5 if self.learning['normalize_advantage'] else 1.
+        advantage = raw_advantage/scale*self.learning['advantage_scale']
+        if self.learning['normalize_advantage']:
+            self.advantage_second_moment=.95*self.advantage_second_moment+.05*float(raw_advantage.square().mean())
         actor_loss = -(self.distribution(observations).log_prob(actions)*advantage).mean()
         critic_loss = .5*(targets-values).square().mean()
         self.actor_optimizer.zero_grad(); actor_loss.backward()
@@ -162,16 +187,18 @@ class ActorCriticPolicy:
             for i in range(len(self.daily_batch)-1,getattr(self,'horizon_start',0)-1,-1):
                 obs,action,day_reward=self.daily_batch[i];total=day_reward+discount*total
                 self.daily_batch[i]=(obs,action,total)
-            self.daily_batch[self.horizon_start:]=[s for s in self.daily_batch[self.horizon_start:] if s[0] is not None]
+            # Keep empty-day slots until paired trajectories have been aligned.
 
     def end_day(self):
         if self.training and self.kind == 'fixed':
-            self._update(self.daily_batch)
+            if self.actor_baselines:self.actor_baselines=[b for s,b in zip(self.daily_batch,self.actor_baselines) if s[0] is not None]
+            self._update([s for s in self.daily_batch if s[0] is not None])
         self.daily_batch = []
+        self.actor_baselines=[]
 
     def to_dict(self):
         return {'algorithm':self.algorithm,'version':1,'kind':self.kind,'scenario':self.scenario,
-                'expected_visitors':self.expected_visitors,'hours':self.hours,'updates':self.updates,
+                'advantage_second_moment':self.advantage_second_moment,'learning':self.learning,'expected_visitors':self.expected_visitors,'hours':self.hours,'updates':self.updates,
                 'payload':pack({'actor':self.actor.state_dict(),'critic':self.critic.state_dict(),
                                 'actor_optimizer':self.actor_optimizer.state_dict(),
                                 'critic_optimizer':self.critic_optimizer.state_dict(),'rng':self.rng})}
@@ -180,11 +207,12 @@ class ActorCriticPolicy:
     def restore(cls, state):
         if state.get('algorithm') != cls.algorithm or state.get('version') != 1:
             raise ValueError('incompatible actor-critic checkpoint')
-        policy = cls(state['kind'],state['scenario'],expected_visitors=state['expected_visitors'],hours=state['hours'])
+        policy = cls(state['kind'],state['scenario'],expected_visitors=state['expected_visitors'],hours=state['hours'],learning=state.get('learning'))
         data = unpack(state['payload'])
         for name in ('actor','critic','actor_optimizer','critic_optimizer'):
             getattr(policy,name).load_state_dict(data[name])
         if any(not torch.isfinite(p).all() for net in (policy.actor,policy.critic) for p in net.parameters()):
             raise ValueError('non-finite network')
+        policy.advantage_second_moment=state.get('advantage_second_moment',1.)
         policy.rng,policy.updates = data['rng'],state['updates']
         return policy

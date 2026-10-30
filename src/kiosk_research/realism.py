@@ -8,6 +8,12 @@ import random
 
 @dataclass
 class Realism:
+    budget_mode: str = 'legacy'
+    budget_multiplier_low: float = .75
+    budget_multiplier_high: float = 1.8
+    inventory_mode: str = 'legacy'
+    expected_purchase_rate: float = .7
+    inventory_cover_days: float = 1.1
     start_date: str = '2026-01-05'
     weekday_multipliers: list = field(default_factory=lambda: [1.] * 7)
     monthly_profile_path: str = ''
@@ -52,6 +58,11 @@ class Realism:
 
     def validate(self):
         date.fromisoformat(self.start_date)
+        if self.budget_mode not in ('legacy','price_relative'):raise ValueError('invalid budget_mode')
+        if self.inventory_mode not in ('legacy','demand'):raise ValueError('invalid inventory_mode')
+        if not 0<self.budget_multiplier_low<=self.budget_multiplier_high or not math.isfinite(self.budget_multiplier_high):raise ValueError('invalid budget range')
+        if not 0<=self.expected_purchase_rate<=1:raise ValueError('invalid purchase rate')
+        if not math.isfinite(self.inventory_cover_days) or self.inventory_cover_days<=0:raise ValueError('invalid inventory cover')
         if self.decision_rule not in ('legacy','inspected'):raise ValueError('invalid decision_rule')
         if self.wait_visibility not in ('full','menu_only','visible_queue'):raise ValueError('invalid wait_visibility')
         if type(self.trust_learning) is not bool:raise ValueError('invalid trust_learning')

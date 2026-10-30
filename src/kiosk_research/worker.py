@@ -37,7 +37,7 @@ def store_day(task):
             elif config.algorithm=='actor_critic':
                 from kiosk_research.actor_critic import ActorCriticPolicy
                 init_rep=rep if config.repetition_seeds and not config.continual else 1
-                def initial_policy():return ActorCriticPolicy(model,scenario,seed_for(config.seed,'neural',case['id'],scenario_name,init_rep),expected,hours)
+                def initial_policy():return ActorCriticPolicy(model,scenario,seed_for(config.seed,'neural',case['id'],scenario_name,init_rep),expected,hours,config.learning)
             else:
                 def initial_policy():return Policy.initial(model)
             incumbent=initial_policy() if fresh else Policy.restore(previous['policies'][key])
@@ -45,7 +45,18 @@ def store_day(task):
             if neural:incumbent.training=phase=='train'
             count=0 if fresh else previous['optimizer_steps'][key]
             started=time.perf_counter()
-            outcomes=[episode(incumbent,lam,config.raw_logs) for lam in lambdas]
+            candidates=incumbent.learning['fixed_candidates'] if neural and model=='fixed' and phase=='train' else 1
+            outcomes=[]
+            for lam in lambdas:
+                start=len(incumbent.daily_batch) if neural else 0
+                trials=[episode(incumbent,lam,config.raw_logs) for _ in range(candidates)]
+                # Report the first sampled trajectory, never the best training result.
+                outcomes.append(trials[0])
+                if neural and incumbent.learning['paired_baseline'] and model=='fixed' and phase=='train':
+                    batch=incumbent.daily_batch[start:];width=len(batch)//candidates
+                    for j,item in enumerate(batch):
+                        peers=[batch[k*width+j%width][2] for k in range(candidates) if k!=j//width]
+                        incumbent.actor_baselines.append(sum(peers)/len(peers))
             visitors=outcomes[0]['visitors']
             accepted=False;initial=None;before=sum(r['reward'] for r in outcomes)/len(lambdas)
             if baseline:
@@ -66,7 +77,7 @@ def store_day(task):
                 row.update(day=day,repetition=rep,phase=phase,store_id=case['id'],scenario=scenario_name,model=model,lambda_value=float(lam),
                            search_stage=config.search_stage(day),lambda_schedule=schedule,
                            accepted_candidate=accepted,optimizer_steps=count,incumbent_train_reward=before if phase=='train' else None,
-                           training_simulator_calls=0 if baseline else (1 if neural else 2) if phase=='train' and visitors else 0,simulator_calls=1 if baseline else (1 if neural else 2) if phase=='train' and visitors else (2 if phase!='train' else 1),
+                           training_simulator_calls=0 if baseline else (candidates if neural else 2) if phase=='train' and visitors else 0,simulator_calls=1 if baseline else (candidates if neural else 2) if phase=='train' and visitors else (2 if phase!='train' else 1),
                            elapsed_seconds=elapsed/len(lambdas),analysis_weight=case['features'].get('analysis_weight',1.),
                            initial_customer=None if initial is None else initial[index]['customer'],
                            initial_store=None if initial is None else initial[index]['store'],initial_reward=None if initial is None else initial[index]['reward'])

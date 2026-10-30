@@ -19,6 +19,14 @@ def run_episode(config,case,policy,lam,scenario,episode_id,namespace='experiment
     template=restore_store(case['template']);store=copy.deepcopy(template)
     stock_rng=random.Random(seed_for(config.seed,namespace,'stock',episode_id,case['id']))
     store.stock={k:max(0,round(v*stock_rng.uniform(.65,1.10))) for k,v in template.stock.items()}
+    if settings.inventory_mode=='demand':
+        from collections import Counter
+        import math
+        expected=config.visitors if config.visitors is not None else float(case['features']['visitor_mean'])
+        # Equal ex-ante menu shares are a declared assumption, never realized choices.
+        units=Counter()
+        for menu in template.menus:units[menu.ingredient]+=menu.units/max(1,len(template.menus))
+        store.stock={k:math.ceil(expected*settings.expected_purchase_rate*units[k]*settings.inventory_cover_days) for k in template.stock}
     hours=case['features'].get('opening_hours');hours=int(hours) if hours and 1<=hours<=24 else 8
     inventory=Inventory(store,settings) if horizon>1 else None
     results=[];logs=[];trust_state={}
@@ -42,6 +50,14 @@ def run_episode(config,case,policy,lam,scenario,episode_id,namespace='experiment
             regulars=customers(repeat_count,random.Random(seed_for(config.seed,namespace,'regulars',case['id'])),template) if repeat_count else []
             people[:len(regulars)]=[replace(c,openness=min(1.,c.openness+settings.repeat_openness_bonus)) for c in regulars]
             person_keys[:len(regulars)]=['regular:'+str(i) for i in range(len(regulars))]
+        if settings.budget_mode=='price_relative':
+            from dataclasses import replace
+            import statistics
+            center=statistics.median(m.price for m in template.menus)
+            # Spending is an anchor, not a measured willingness-to-pay distribution.
+            spend=case['features'].get('spend_won')
+            if spend is not None and float(spend)>0: center=float(spend)/1000.
+            people=[replace(c,budget=center*(settings.budget_multiplier_low+(settings.budget_multiplier_high-settings.budget_multiplier_low)*(c.budget-8.)/14.)) for c in people]
         purchase=0.
         if inventory:store,purchase=inventory.morning(template,seed_for(config.seed,namespace,'delivery',episode_id,index,case['id']))
         if hasattr(policy,'expected_visitors'):policy.expected_visitors=expected;policy.hours=hours
@@ -68,6 +84,8 @@ def run_episode(config,case,policy,lam,scenario,episode_id,namespace='experiment
                mean_weights=np.mean([r['mean_weights'] for r in results],axis=0).tolist(),logs=logs,
                eligible=any(r['eligible'] for r in results),horizon_days=horizon,
                calendar_start=results[0]['calendar_date'],calendar_end=results[-1]['calendar_date'],
+               budget_mode=settings.budget_mode,inventory_mode=settings.inventory_mode,
+               budget_anchor_source=('spend_won' if case['features'].get('spend_won') else 'menu_median') if settings.budget_mode=='price_relative' else 'legacy_8_22',
                opening_hours=hours,opening_hour=start_hour(config,hours),
                arrivals_source=('sales_counts' if config.sales_profile_path else 'assumed')+('_population_blend' if settings.population_path else ''),weekday_source=weekday_source,
                day_type='weekend' if settings.calendar(episode_id).weekday()>=5 else 'weekday')
