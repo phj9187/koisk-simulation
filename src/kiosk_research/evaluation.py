@@ -28,5 +28,8 @@ def score_outcomes(components, scenario, lam):
         if len(weights) != size or any(not math.isfinite(v) or v < 0 for v in weights) or not math.isclose(sum(weights), 1.):
             raise ValueError('invalid satisfaction coefficients')
     customer = sum(a * components[k] for a, k in zip(scenario['customer'], CUSTOMER_METRICS))
+    fatigue=components.get('choice_fatigue_per_visitor',0.)
+    if not math.isfinite(fatigue) or fatigue<0:raise ValueError('invalid choice fatigue')
+    customer=max(0.,customer-fatigue)
     store = sum(a * components[k] for a, k in zip(scenario['store'], STORE_METRICS))
     return {'customer': customer, 'store': store, 'reward': lam * customer + (1-lam) * store}

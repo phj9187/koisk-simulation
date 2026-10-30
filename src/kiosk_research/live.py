@@ -112,13 +112,21 @@ def run_live(root,config,deadline_utc,resume_id=None,target_day=None,display=Tru
         from kiosk_research.model_board import ModelBoard
         dashboard=ModelBoard(run,deadline_utc,display)
     else:dashboard=LiveDashboard(run,deadline_utc,display)
+    def completed(current):
+        dashboard.completed(current)
+        horizon=current.config.realism.get('inventory_horizon_days',1)
+        print('Completed episodes:',current.state['day'],'| calendar days:',current.state['day']*horizon,
+              '| stage:',current.config.search_stage(current.state['day']),flush=True)
     try:
-        run.run(progress=dashboard.progress,day_callback=dashboard.completed,target_day=target_day,deadline_utc=deadline_utc)
+        run.run(progress=dashboard.progress,day_callback=completed,target_day=target_day,deadline_utc=deadline_utc)
     finally:
         pending=run.checkpoints/f"partial_{run.state['day']+1:06d}"
         count=len(list(pending.glob('store_*.json')))
         if count:dashboard.progress(run.state['day']+1,count,run.config.stores)
         else:dashboard.refresh()
+        if cards:
+            bundle=dashboard.export_bundle()
+            print('Saved dashboard bundle:',bundle,flush=True)
     if run.state['day']:
         from kiosk_research.analysis import export
         summary=export(run)

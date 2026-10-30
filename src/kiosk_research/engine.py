@@ -31,7 +31,7 @@ class Experiment:
         if config.algorithm=='actor_critic':self.identity['schema']=5
         if 'no_recommendation' in config.models:self.identity['schema']=6
         if config.lambda_search=='pareto_two_stage':self.identity['schema']=7
-        self.identity['schema']=8
+        self.identity['schema']=9
         self.identity['input_files']={}
         for role,path in [('survey',config.survey_path if config.source=='empirical' else ''),('sales',config.sales_profile_path),('population',config.realism.get('population_path','')),('monthly_scenario',config.realism.get('monthly_profile_path',''))]:
             if path:

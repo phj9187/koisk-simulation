@@ -16,6 +16,21 @@ class Realism:
     decision_multiplier: float = 1.
     decision_penalty: float = 0.
     choice_noise: float = .16
+    consideration_mean: float | None = None
+    salience_position: float = 0.
+    salience_category: float = 0.
+    salience_popularity: dict = field(default_factory=dict)
+    taste_noise: float = 0.
+    regular_taste_noise: float | None = None
+    ai_taste_noise: float = 0.
+    overload_penalty: float = 0.
+    decision_rule: str = 'legacy'
+    decision_base: float = .8
+    decision_per_item: float = .25
+    wait_visibility: str = 'full'
+    wait_noise: float = 0.
+    trust_learning: bool = False
+    trust_rate: float = .1
     patience_minutes: float = 0.
     cook_time_cv: float = 0.
     demand_cv: float = 0.
@@ -37,6 +52,17 @@ class Realism:
 
     def validate(self):
         date.fromisoformat(self.start_date)
+        if self.decision_rule not in ('legacy','inspected'):raise ValueError('invalid decision_rule')
+        if self.wait_visibility not in ('full','menu_only','visible_queue'):raise ValueError('invalid wait_visibility')
+        if type(self.trust_learning) is not bool:raise ValueError('invalid trust_learning')
+        for key in ('consideration_mean','regular_taste_noise'):
+            value=getattr(self,key)
+            if value is not None and (not math.isfinite(value) or value<0):raise ValueError('invalid '+key)
+        for key in ('taste_noise','ai_taste_noise','overload_penalty','decision_base','decision_per_item','wait_noise'):
+            if not math.isfinite(getattr(self,key)) or getattr(self,key)<0:raise ValueError('invalid '+key)
+        if not 0<=self.trust_rate<=1:raise ValueError('invalid trust_rate')
+        if any(not math.isfinite(v) for v in (self.salience_position,self.salience_category)):raise ValueError('invalid salience')
+        if not isinstance(self.salience_popularity,dict) or any(not math.isfinite(v) for v in self.salience_popularity.values()):raise ValueError('invalid popularity')
         for key in ('recommendation_count','inventory_horizon_days','shelf_life_days'):
             value=getattr(self,key)
             if type(value) is not int or not 1 <= value <= (3 if key=='recommendation_count' else 30):

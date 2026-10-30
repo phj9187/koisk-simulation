@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 import json
 from pathlib import Path
 import threading
+import zipfile
 from urllib.parse import parse_qs,urlsplit
 import pandas as pd
 from kiosk_research.persistence import load_checkpoint,write_json,atomic_bytes
@@ -202,3 +203,13 @@ class ModelBoard:
                 display(HTML('<p>실시간 화면 연결을 확인할 수 없습니다. 저장된 live/model_board.html과 cards 폴더를 함께 내려받아 열 수 있습니다.</p>'))
                 write_json(self.folder/'display_error.json',{'type':type(exc).__name__,'message':str(exc),'fallback':'saved HTML plus cards directory'})
         return self.server.server_port
+
+    def export_bundle(self):
+        """Save the page and its per-model scripts as one portable download."""
+        path=self.run.directory/'dashboard_bundle.zip'
+        temporary=path.with_suffix('.zip.tmp')
+        with zipfile.ZipFile(temporary,'w',zipfile.ZIP_DEFLATED) as archive:
+            for source in sorted(self.folder.rglob('*')):
+                if source.is_file():archive.write(source,source.relative_to(self.folder))
+        temporary.replace(path)
+        return path

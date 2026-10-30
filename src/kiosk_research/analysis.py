@@ -1,5 +1,6 @@
 """Two-objective evaluation; no scalar final ranking across satisfaction assumptions."""
 from pathlib import Path
+import json
 from kiosk_research.policy import COMPONENTS
 from kiosk_research.evaluation import CUSTOMER_METRICS,STORE_METRICS
 import numpy as np
@@ -29,13 +30,20 @@ def aggregate(frame,per_store=False,phase='evaluation'):
     keys=['repetition','scenario','model','lambda_value']+(['store_id'] if per_store else [])
     metrics=['customer','store','reward','profit','mean_total_wait','served','leftover_units','initial_customer','initial_store','initial_reward']+list(CUSTOMER_METRICS+STORE_METRICS)+['served_fraction','risk_reduction_applicable']+[k for k in frame if k.startswith('weight_')]
     metrics += [k for k in ('mean_kiosk_wait','mean_decision_time','mean_cook_wait','mean_cook_time','mean_seat_wait','abandoned','expired_units','inventory_loss','holding_cost','purchase_cost','gross_profit') if k in frame]
+    metrics += [k for k in ('choice_fatigue_per_visitor','mean_inspected_menus','infeasible_customers','infeasible_rescue_stock','infeasible_rescue_budget','infeasible_rescue_allergy','infeasible_rescue_combined') if k in frame]
     rows=[]
     for group,v in frame[(frame.phase==phase)&frame.eligible].groupby(keys):
         row=dict(zip(keys,group));weights=v.analysis_weight.to_numpy(float)
         for key in metrics:
             valid=v[key].notna();row[key]=float(np.average(v.loc[valid,key],weights=weights[valid])) if valid.any() else None
+        if 'customer_component_samples' in v:
+            samples=[]
+            for (_,observation),weight in zip(v.iterrows(),weights):
+                values=json.loads(observation.customer_component_samples)
+                samples.extend({'values':value,'weight':float(weight)/sum(weights)/len(values)} for value in values)
+            row['customer_component_samples']=json.dumps(samples)
         row.update(simulator_calls=int(v.simulator_calls.sum()),elapsed_seconds=float(v.elapsed_seconds.sum()));rows.append(row)
-    out=pd.DataFrame(rows,columns=keys+metrics+['simulator_calls','elapsed_seconds'])
+    out=pd.DataFrame(rows,columns=keys+metrics+['simulator_calls','elapsed_seconds']+(['customer_component_samples'] if 'customer_component_samples' in frame else []))
     out['phase']=phase
     out['pareto']=False
     if not out.empty:

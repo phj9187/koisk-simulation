@@ -1,5 +1,7 @@
 # AI 키오스크 · λ 조건부 파레토 연구
 
+**손님 정보 제한 비교:** 메뉴 고려 집합, 손님/AI 맛 인식 오차, 순차 탐색시간, 선택 피로, 대기 인식과 선택적 신뢰 갱신을 별도 설정으로 지원합니다. 기존 기본 행동은 보존하고 `customer_information_pilot`으로 비교하세요. Colab은 기본적으로 텍스트 진행과 `dashboard_bundle.zip` 저장을 사용합니다. [가정·검증 결과](docs/customer_information_ko.md).
+
 **2026-10-30 현실 조건 확장:** 수렴 검사 환경 통일, 학습 전후 진단, 행동 민감도, 반복별 seed, 3일 재고·발주·폐기, 요일 수요, 2~3개 추천, 대기 포기·조리 변동·선택적 좌석/재방문을 지원합니다. 새 기본 실시간 노트북은 `realistic_pilot`을 사용합니다. [설정·자료·검증 범위](docs/realism_20261030_ko.md). 기존 synthetic 실험과 다른 schema와 새 ID로 실행하세요.
 
 **실제 매장 자료를 다시 씁니다.** `actor_critic_*.yaml`은 KREI 2025 원자료의 LHS 표본 매장(pilot 8곳, research·continual 64곳)을 쓰고, 매장별 평균 방문자 수를 중심으로 날짜마다 포아송 변동을 줍니다. 서울시 상권분석서비스 추정매출-상권 CSV를 Drive `AI-Kiosk-Data/raw_data/seoul_sales.csv`에 올리면 실제 시간대별 매출 패턴으로 손님이 도착합니다. 두 원자료가 없으면 이 설정은 실행을 거부하며, 로컬에서 쓰려면 `survey_path`·`sales_profile_path`를 바꾸세요. 새 설정 키의 기본값(`visitor_variation: fixed`, 매출 자료 없음)은 예전 동작과 같아서 기존 실험은 같은 결과로 재개됩니다.

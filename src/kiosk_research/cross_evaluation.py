@@ -1,5 +1,6 @@
 """Frozen-policy utility reassessment. Final results are descriptive, never selection data."""
 import pandas as pd
+import json
 from kiosk_research.evaluation import CUSTOMER_METRICS, STORE_METRICS
 
 
@@ -16,6 +17,10 @@ def cross_evaluate(points, criteria, tradeoff=.5):
     for name,weights in criteria.items():
         for _,p in points.iterrows():
             c=sum(a*float(p[k]) for a,k in zip(weights['customer'],CUSTOMER_METRICS))
+            if 'customer_component_samples' in p:
+                samples=json.loads(p.customer_component_samples)
+                c=sum(row['weight']*max(0.,sum(a*b for a,b in zip(weights['customer'],row['values'][:3]))-row['values'][3]) for row in samples)
+            else:c=max(0.,c-float(p.get('choice_fatigue_per_visitor',0.)))
             s=sum(a*float(p[k]) for a,k in zip(weights['store'],STORE_METRICS))
             rows.append({'repetition':p.repetition,'model':p.model,'training_scenario':p.scenario,
                          'policy_lambda':p.lambda_value,'evaluation_scenario':name,'evaluation_lambda':tradeoff,

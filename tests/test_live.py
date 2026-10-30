@@ -5,12 +5,22 @@ import unittest
 from unittest.mock import patch
 import pandas as pd
 from kiosk_research.engine import Experiment
-from kiosk_research.live import LiveDashboard,summarize
+from kiosk_research.live import LiveDashboard,summarize,run_live
+import zipfile
 from kiosk_research.persistence import read_json
 from test_pareto_research import small
 
 
 class LiveTests(unittest.TestCase):
+    def test_headless_live_run_completes_and_exports_portable_details(self):
+        with tempfile.TemporaryDirectory() as root,patch('kiosk_research.model_board.ModelBoard.start_server') as server:
+            run=run_live(root,small(algorithm='actor_critic',models=['no_recommendation','fixed','contextual'],decision_time_mode='equal'),None,display=False)
+            server.assert_not_called()
+            self.assertEqual(run.state['stop_reason'],'completed')
+            with zipfile.ZipFile(run.directory/'dashboard_bundle.zip') as archive:
+                self.assertIn('model_board.html',archive.namelist())
+                self.assertTrue(any(name.startswith('cards/detail_') and name.endswith('.js') for name in archive.namelist()))
+
     def test_expired_deadline_starts_no_day(self):
         with tempfile.TemporaryDirectory() as root:
             run=Experiment(small(),root)
