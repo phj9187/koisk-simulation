@@ -124,7 +124,7 @@ class ResearchTests(unittest.TestCase):
 
     def test_checksum(self):
         with tempfile.TemporaryDirectory() as root:
-            p=Path(root)/'s.json';save_checkpoint(p,{'value':1});v=json.loads(p.read_text());v['state']['value']=2;p.write_text(json.dumps(v))
+            p=Path(root)/'s.json';save_checkpoint(p,{'value':1});v=json.loads(p.read_text(encoding='utf-8'));v['state']['value']=2;p.write_text(json.dumps(v))
             with self.assertRaises(ValueError):load_checkpoint(p)
 
     def test_freeze_equal_budgets_and_no_duplicates(self):
@@ -279,10 +279,10 @@ class ResearchTests(unittest.TestCase):
             with self.assertRaises(ValueError):ensure_survey(path)
 
     def test_notebook_and_original_integrity(self):
-        root=Path(__file__).resolve().parents[1];n=json.loads((root/'notebooks/run_simulation.ipynb').read_text())
+        root=Path(__file__).resolve().parents[1];n=json.loads((root/'notebooks/run_simulation.ipynb').read_text(encoding='utf-8'))
         for i,c in enumerate(n['cells']):
             if c['cell_type']=='code':compile(''.join(c['source']),f'cell-{i}','exec');self.assertFalse(c['outputs'])
         import hashlib
-        for p,sha in json.loads((root/'docs/original_source_sha256.json').read_text()).items():self.assertEqual(hashlib.sha256((root/p).read_bytes()).hexdigest(),sha)
+        for p,sha in json.loads((root/'docs/original_source_sha256.json').read_text(encoding='utf-8')).items():self.assertEqual(hashlib.sha256((root/p).read_bytes()).hexdigest(),sha)
 
 if __name__=='__main__':unittest.main()

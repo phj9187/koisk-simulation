@@ -115,6 +115,7 @@ class ModelBoard:
                     'active_day':self.active_day,'completed_stores':self.completed_stores,'total_stores':self.run.config.stores,
                     'search_stage':self.run.config.search_stage(max(1,self.run.state['day']+1)),
                     'stop_reason':self.run.state['stop_reason'],'history_limit':self.limit,'cards':cards,
+                    'horizon_days':self.run.config.realism.get('inventory_horizon_days',1),
                     'plans':self.run.state.get('lambda_search',{}).copy(),
                     'note':'synthetic utilities; rank uses completed frozen evaluation cycles only; alpha/beta define different assumed utilities'}
 
@@ -138,6 +139,12 @@ class ModelBoard:
         payload=self.snapshot()
         if persist:
             write_json(self.folder/'board_index.json',payload)
+            for key in self.metadata:
+                detail=self.detail(key)
+                saved={'all':detail}
+                for lam in detail['available_lambdas']:saved[str(float(lam))]=self.detail(key,str(lam))
+                content='window._savedModelDetails=window._savedModelDetails||{};window._savedModelDetails['+json.dumps(key)+']='+json.dumps(saved,ensure_ascii=False,allow_nan=False).replace('<','\\u003c')+';'
+                atomic_bytes(self.folder/'cards'/('detail_'+key.replace(':','_')+'.js'),content.encode('utf-8'))
             template=Path(__file__).with_name('model_board.html').read_text(encoding='utf-8')
             # Embedded initial snapshot also makes a useful saved offline overview.
             initial=json.dumps(payload,ensure_ascii=False,allow_nan=False).replace('<','\\u003c')
@@ -187,6 +194,11 @@ class ModelBoard:
         self.server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
         threading.Thread(target=self.server.serve_forever,daemon=True).start()
         if show:
-            from google.colab import output
-            output.serve_kernel_port_as_iframe(self.server.server_port,height=900)
+            try:
+                from google.colab import output
+                output.serve_kernel_port_as_iframe(self.server.server_port,height=900)
+            except Exception as exc:
+                from IPython.display import HTML,display
+                display(HTML('<p>실시간 화면 연결을 확인할 수 없습니다. 저장된 live/model_board.html과 cards 폴더를 함께 내려받아 열 수 있습니다.</p>'))
+                write_json(self.folder/'display_error.json',{'type':type(exc).__name__,'message':str(exc),'fallback':'saved HTML plus cards directory'})
         return self.server.server_port

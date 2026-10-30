@@ -8,7 +8,8 @@ def compare_baseline(frame,seed=42,independent=False):
              'improvement','relative_improvement','paired_observations','repetitions_or_cycles','ci95_low','ci95_high','inference']
     if frame.empty or 'no_recommendation' not in set(frame.model):return pd.DataFrame(columns=columns)
     metrics=[k for k in ('customer','store','reward','profit','mean_total_wait','leftover_units','served_fraction',
-                         'taste_fit_per_visitor','affordability_per_visitor','wait_component_per_visitor','margin_component','waste_reduction_component') if k in frame]
+                         'taste_fit_per_visitor','affordability_per_visitor','wait_component_per_visitor','margin_component','waste_reduction_component',
+                         'abandoned','expired_units','inventory_loss','holding_cost','mean_kiosk_wait','mean_decision_time','mean_cook_wait','mean_cook_time','mean_seat_wait') if k in frame]
     keys=['day','repetition','store_id','scenario','lambda_value']
     evaluated=frame[frame.phase.eq('evaluation')&frame.eligible]
     base=evaluated[evaluated.model.eq('no_recommendation')][keys+metrics]
@@ -23,7 +24,7 @@ def compare_baseline(frame,seed=42,independent=False):
             weights=group.analysis_weight.to_numpy(float) if 'analysis_weight' in group else np.ones(len(group))
             for metric in metrics:
                 a=group[metric+'_ai'].to_numpy(float);b=group[metric+'_baseline'].to_numpy(float)
-                sign=-1. if metric in ('mean_total_wait','leftover_units') else 1.
+                sign=-1. if metric in ('mean_total_wait','leftover_units','abandoned','expired_units','inventory_loss','holding_cost','mean_kiosk_wait','mean_decision_time','mean_cook_wait','mean_cook_time','mean_seat_wait') else 1.
                 improvement=sign*(a-b);ci=[None,None]
                 # Days/stores inside a learning repetition are not independent replicas.
                 differences=[]

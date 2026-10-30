@@ -49,8 +49,20 @@ class Config:
     convergence_window: int = 100
     convergence_tolerance: float = .01
     convergence_probe_every: int = 5
+    realism: dict = field(default_factory=dict)
+    diagnostics: bool = False
+    repetition_seeds: bool = True
 
     def validate(self, require_source=True):
+        from kiosk_research.realism import options
+        settings=options(self)
+        if settings.population_path and require_source and not Path(settings.population_path).is_file():raise ValueError('population file not found')
+        if settings.monthly_profile_path and require_source:
+            from kiosk_research.realism import monthly_multiplier
+            monthly_multiplier(settings,settings.calendar(1))
+        for key in ('diagnostics','repetition_seeds'):
+            if type(getattr(self,key)) is not bool:raise ValueError('invalid '+key)
+        if settings.inventory_horizon_days>1 and self.algorithm!='actor_critic':raise ValueError('multiday inventory requires actor_critic')
         if self.algorithm not in ('random_search','actor_critic'):raise ValueError('unknown algorithm')
         if self.decision_time_mode not in ('legacy','equal'):raise ValueError('unknown decision time mode')
         if self.lambda_search not in ('fixed','pareto_two_stage'):raise ValueError('unknown lambda search')

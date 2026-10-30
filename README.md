@@ -1,5 +1,7 @@
 # AI 키오스크 · λ 조건부 파레토 연구
 
+**2026-10-30 현실 조건 확장:** 수렴 검사 환경 통일, 학습 전후 진단, 행동 민감도, 반복별 seed, 3일 재고·발주·폐기, 요일 수요, 2~3개 추천, 대기 포기·조리 변동·선택적 좌석/재방문을 지원합니다. 새 기본 실시간 노트북은 `realistic_pilot`을 사용합니다. [설정·자료·검증 범위](docs/realism_20261030_ko.md). 기존 synthetic 실험과 다른 schema와 새 ID로 실행하세요.
+
 **실제 매장 자료를 다시 씁니다.** `actor_critic_*.yaml`은 KREI 2025 원자료의 LHS 표본 매장(pilot 8곳, research·continual 64곳)을 쓰고, 매장별 평균 방문자 수를 중심으로 날짜마다 포아송 변동을 줍니다. 서울시 상권분석서비스 추정매출-상권 CSV를 Drive `AI-Kiosk-Data/raw_data/seoul_sales.csv`에 올리면 실제 시간대별 매출 패턴으로 손님이 도착합니다. 두 원자료가 없으면 이 설정은 실행을 거부하며, 로컬에서 쓰려면 `survey_path`·`sales_profile_path`를 바꾸세요. 새 설정 키의 기본값(`visitor_variation: fixed`, 매출 자료 없음)은 예전 동작과 같아서 기존 실험은 같은 결과로 재개됩니다.
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/phj9187/koisk-simulation/blob/main/notebooks/run_actor_critic_live.ipynb) 실시간 노트북은 항상 이 배지로 열고, 노트북을 고쳤다면 Colab의 **파일 → GitHub에 사본 저장**으로 `main`의 같은 경로에 저장하세요.

@@ -96,12 +96,12 @@ class PipelineTests(unittest.TestCase):
     def test_notebooks_compile_and_autorun_is_opt_in_for_upload(self):
         root=Path(__file__).resolve().parents[1]
         for path in (root/'notebooks').glob('run*.ipynb'):
-            n=json.loads(path.read_text())
+            n=json.loads(path.read_text(encoding='utf-8'))
             for i,cell in enumerate(n['cells']):
                 if cell['cell_type']=='code':
                     compile(''.join(cell['source']),f'{path.name}:{i}','exec')
                     self.assertFalse(cell['outputs'])
-        text=(root/'notebooks/run_automatic.ipynb').read_text()
+        text=(root/'notebooks/run_automatic.ipynb').read_text(encoding='utf-8')
         self.assertIn('UPLOAD_SUMMARY = False',text)
 
 if __name__=='__main__':unittest.main()

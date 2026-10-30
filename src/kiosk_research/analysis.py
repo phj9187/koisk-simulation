@@ -28,6 +28,7 @@ def aggregate(frame,per_store=False,phase='evaluation'):
         frame=frame[frame.search_stage.isin(['fixed','validation'])]
     keys=['repetition','scenario','model','lambda_value']+(['store_id'] if per_store else [])
     metrics=['customer','store','reward','profit','mean_total_wait','served','leftover_units','initial_customer','initial_store','initial_reward']+list(CUSTOMER_METRICS+STORE_METRICS)+['served_fraction','risk_reduction_applicable']+[k for k in frame if k.startswith('weight_')]
+    metrics += [k for k in ('mean_kiosk_wait','mean_decision_time','mean_cook_wait','mean_cook_time','mean_seat_wait','abandoned','expired_units','inventory_loss','holding_cost','purchase_cost','gross_profit') if k in frame]
     rows=[]
     for group,v in frame[(frame.phase==phase)&frame.eligible].groupby(keys):
         row=dict(zip(keys,group));weights=v.analysis_weight.to_numpy(float)
@@ -83,16 +84,22 @@ def recommend(points,min_customer=None,min_store=None):
 
 def store_effects(points,cases):
     """Exploratory grouped donor CV; standardized ridge associations, not causal."""
-    names=['visitor_mean','cooks','menu_price','prep_minutes','stock_units'];features=[]
+    names=['visitor_mean','cooks','menu_price','prep_minutes','stock_units','cost_ratio','expiry_risk','menu_diversity','taste_1','taste_2','taste_3'];features=[]
     for c in cases:
         t=c['template'];menus=t['menus']
         features.append({'store_id':c['id'],'donor':str(c['features'].get('source_row','synthetic-'+str(c['id']))),
                          'visitor_mean':float(c['features']['visitor_mean']),'cooks':t['cooks'],
-                         'menu_price':np.mean([m['price'] for m in menus]),'prep_minutes':np.mean([m['cook_minutes'] for m in menus]),'stock_units':sum(t['stock'].values())})
+                         'menu_price':np.mean([m['price'] for m in menus]),'prep_minutes':np.mean([m['cook_minutes'] for m in menus]),'stock_units':sum(t['stock'].values()),
+                         'cost_ratio':np.mean([m['cost']/max(1e-9,m['price']) for m in menus]),'expiry_risk':np.mean([m['expiry_risk'] for m in menus]),
+                         'menu_diversity':len(menus),**{'taste_'+str(i+1):np.mean([m['taste'][i] for m in menus]) for i in range(3)}})
     records=[]
     if points.empty:return pd.DataFrame(columns=['scenario','model','lambda_value','outcome','feature','coefficient','group_cv_mae'])
     for keys,g in points.groupby(['scenario','model','lambda_value']):
-        v=g.groupby('store_id')[['customer','store']].mean().reset_index().merge(pd.DataFrame(features),on='store_id')
+        v=g.groupby('store_id')[['customer','store','reward']].mean().reset_index().merge(pd.DataFrame(features),on='store_id')
+        scenario,model,lam=keys
+        base=points[(points.scenario==scenario)&(points.model=='no_recommendation')&(points.lambda_value==lam)].groupby('store_id')[['customer','store','reward']].mean()
+        for metric in ('customer','store','reward'):
+            v['delta_'+metric]=v[metric]-v.store_id.map(base[metric])
         if v.donor.nunique()<6:continue
         x=v[names].to_numpy(float)
         def fit(tx,ty,test):
@@ -100,7 +107,8 @@ def store_effects(points,cases):
             design=np.column_stack([np.ones(len(tx)),(tx-mean)/scale]);penalty=np.diag([0.]+[1.]*len(names))
             beta=np.linalg.solve(design.T@design+penalty,design.T@ty)
             return np.column_stack([np.ones(len(test)),(test-mean)/scale])@beta,beta
-        for outcome in ('customer','store'):
+        for outcome in ('customer','store','reward','delta_customer','delta_store','delta_reward'):
+            if v[outcome].isna().any():continue
             y=v[outcome].to_numpy(float);prediction=np.zeros(len(v))
             for donor in v.donor.unique():
                 mask=(v.donor==donor).to_numpy();prediction[mask]=fit(x[~mask],y[~mask],x[mask])[0]
@@ -184,6 +192,24 @@ def export(experiment,target_root=None):
     from kiosk_research.baseline import compare_baseline
     baseline=compare_baseline(final,experiment.config.seed,independent=not experiment.config.continual)
     atomic_bytes(target/'baseline_comparison.csv',baseline.to_csv(index=False).encode('utf-8'))
+    diagnostic_rows=[]
+    for path in sorted((experiment.directory/'diagnostics').glob('episode_*.json')):
+        if int(path.stem.split('_')[-1])<=experiment.state['day']:diagnostic_rows.extend(read_json(path))
+    if diagnostic_rows:
+        diagnostics=pd.DataFrame(diagnostic_rows)
+        atomic_bytes(target/'learning_diagnostics.csv',diagnostics.drop(columns=['event_log_json'],errors='ignore').to_csv(index=False).encode('utf-8'))
+        if 'event_log_json' in diagnostics:atomic_bytes(target/'diagnostic_events.jsonl',diagnostics.to_json(orient='records',lines=True,force_ascii=False).encode('utf-8'))
+    if experiment.config.diagnostics:
+        from kiosk_research.diagnostics import sensitivity
+        from kiosk_research.policy import Policy
+        sensitivity_rows=[]
+        for case in experiment.state['cases']:
+            for name,scenario in experiment.config.scenarios.items():
+                for model in experiment.config.models:
+                    if model=='no_recommendation':continue
+                    policy=Policy.restore(experiment.state['stores'][str(case['id'])]['policies'][name+':'+model])
+                    sensitivity_rows.extend(dict(r,scenario=name) for r in sensitivity(experiment.config,case,policy,scenario))
+        atomic_bytes(target/'behavior_sensitivity.csv',pd.DataFrame(sensitivity_rows).to_csv(index=False).encode('utf-8'))
     if experiment.config.lambda_search=='pareto_two_stage':
         write_json(target/'lambda_search.json',experiment.state.get('lambda_search',{}))
         schedule=frame[['day','repetition','scenario','model','search_stage','lambda_schedule','lambda_value']].drop_duplicates()
@@ -230,6 +256,7 @@ Synthetic outcomes, not measured human satisfaction.
 - Cross evaluation of final dates is descriptive and must not be used to select a final policy.
 - Weighted sums, finite search and model classes do not guarantee the whole/global Pareto frontier.
 """
+    text += '\nRealism protocol: see metadata.json realism. Each recorded day is one finite episode; horizon_days calendar dates per episode. Profit is summed over that horizon; C/S/R are daily means. Single-day and multiday objective scales differ and must not be pooled. Independent repetitions are conditional on the same sampled stores. Five repetitions do not guarantee interval coverage.\n'
     if not independent:
         text=text.replace(f'Completed independent repetitions: {len(completed)}',f'Completed dependent learning cycles: {len(completed)}')
         text=text.replace('Each repetition restarts models.','Models carry forward across cycles; models do not restart.')

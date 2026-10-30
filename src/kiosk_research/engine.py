@@ -31,6 +31,12 @@ class Experiment:
         if config.algorithm=='actor_critic':self.identity['schema']=5
         if 'no_recommendation' in config.models:self.identity['schema']=6
         if config.lambda_search=='pareto_two_stage':self.identity['schema']=7
+        self.identity['schema']=8
+        self.identity['input_files']={}
+        for role,path in [('survey',config.survey_path if config.source=='empirical' else ''),('sales',config.sales_profile_path),('population',config.realism.get('population_path','')),('monthly_scenario',config.realism.get('monthly_profile_path',''))]:
+            if path:
+                data=Path(path).read_bytes()
+                self.identity['input_files'][role]={'path':str(Path(path).resolve()),'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
         if resume:
             if not self.directory.is_dir():raise FileNotFoundError('experiment not found')
             with exclusive_lock(self.directory/'RUNNING.lock'):self._load()
@@ -53,6 +59,13 @@ class Experiment:
                     self.metadata['protocol']+='; unassisted customer-choice control; equal decision-time formula in every arm; no automatic migration of prior experiments'
                 if config.lambda_search=='pareto_two_stage':
                     self.metadata['protocol']+='; coarse training / frozen selection / refined training / frozen validation / held-out evaluation; validation-only shared Pareto-knee grid per scenario'
+                from kiosk_research.realism import options
+                self.metadata['realism']={'parameters':options(config).to_dict(),
+                    'provenance':'Behavior, inventory and operations parameters are declared hypotheses, not customer estimates.',
+                    'inventory_protocol':'Finite multiday episodes; FIFO age cohorts, next-morning base-stock replenishment; reset equally at each episode boundary; discounted return-to-go across days.',
+                    'reward_protocol':'Single-day legacy components unchanged. Multiday margin=.5+.5*net_margin/reference; waste=1-expired/available. Net margin deducts expired inventory and holding/disposal costs; purchase is a cash-flow item, not double-charged COGS.',
+                    'calendar_protocol':'Nonoverlapping calendar blocks per episode; weekday x hourly sales factorization is a separability hypothesis.',
+                    'seed_protocol':'Independent repetition initialization seeds; common exogenous customer, demand, delivery and service-time streams across arms; diagnostic namespaces separate.'}
                 self.state={'identity':self.identity,'day':0,'stop_reason':'','cases':cases,'stores':{},'parts':[],'raw_parts':[]}
                 write_json(self.directory/'metadata.json',self.metadata);self._save()
         self._frontier=self._signature()
@@ -172,10 +185,13 @@ class Experiment:
             with ProcessPoolExecutor(max_workers=self.config.workers,mp_context=multiprocessing.get_context('spawn')) as pool:
                 futures=[pool.submit(store_day,t) for t in tasks]
                 for future in as_completed(futures):commit(future.result())
-        rows=[];logs=[];stores={}
+        rows=[];logs=[];stores={};diagnostics=[]
         for case in self.state['cases']:
             result=done[case['id']];rows.extend(result['rows']);logs.extend(result['logs'])
-            stores[str(case['id'])]={k:v for k,v in result.items() if k not in ('rows','logs')}
+            diagnostics.extend(result.get('diagnostics',[]))
+            stores[str(case['id'])]={k:v for k,v in result.items() if k not in ('rows','logs','diagnostics')}
+        if diagnostics:
+            write_json(self.directory/'diagnostics'/f'episode_{day:06d}.json',diagnostics)
         rows=unique_records(pd.DataFrame(rows),['day','store_id','scenario','model','lambda_value']).to_dict(orient='records')
         relative=f'detailed_results/daily_{day:06d}.parquet';digest=parquet(self.directory/relative,rows);raw=None
         if logs:

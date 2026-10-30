@@ -9,6 +9,7 @@ from kiosk_sim.generators import customers
 from kiosk_research.policy import Policy
 from kiosk_research.worker import restore_store,seed_for
 from kiosk_research.simulation import simulate
+from kiosk_research.episodes import run_episode
 from kiosk_research.persistence import atomic_bytes,encoded,read_json,write_json
 
 
@@ -37,6 +38,14 @@ def fixed_probes(run,include_scores=False):
                 if model=='no_recommendation':continue
                 keys.append(str(case['id'])+':'+name+':'+model)
                 policy=Policy.restore(run.state['stores'][str(case['id'])]['policies'][name+':'+model])
+                if hasattr(policy,'expected_visitors'):
+                    from kiosk_research.realism import options,monthly_multiplier
+                    from kiosk_research.arrivals import sales_day_multiplier
+                    settings=options(run.config);calendar=settings.calendar(1)
+                    mean=run.config.visitors if run.config.visitors is not None else float(case['features']['visitor_mean'])
+                    policy.expected_visitors=mean*settings.weekday_multipliers[calendar.weekday()]*sales_day_multiplier(run.config,calendar)[0]*monthly_multiplier(settings,calendar)
+                    hours=case['features'].get('opening_hours')
+                    policy.hours=int(hours) if hours and 1<=hours<=24 else 8
                 weights.append([policy.weights(person,shop,0.,lam) for person,shop in contexts for lam in (0.,.25,.5,.75,1.)])
                 if include_scores:
                     # Separate seed namespace: never the training, validation or final dates.
@@ -44,9 +53,7 @@ def fixed_probes(run,include_scores=False):
                     for lam in (0.,.5,1.):
                         rewards=[]
                         for sample in range(3):
-                            people=customers(30,random.Random(seed_for(run.config.seed,'convergence_people',case['id'],sample)),original)
-                            result=simulate(people,original,policy,lam,scenario,
-                                seed_for(run.config.seed,'convergence_events',case['id'],sample),run.config.wait_scale,decision_time_mode=run.config.decision_time_mode)
+                            result=run_episode(run.config,case,policy,lam,scenario,sample+1,namespace='convergence')
                             rewards.append(result['reward'])
                         values.append(float(np.mean(rewards)))
                     scores.append(values)
@@ -94,6 +101,7 @@ def observe(run):
     result={'day':day,'training_dates':count,'window_training_dates':window,
         'tolerance':run.config.convergence_tolerance,'converged':False,'status':'warming_up',
         'interpretation':'fixed-probe functional stability; not optimality or real-world accuracy'}
+    result['probe_protocol']='shared environment builder; fixed seed/sample/calendar/inventory per probe, independent of training dates'
     counts=[h[0]['training_date'] for h in history]
     score_rows=[h for h in history if h[0]['has_scores']]
     enough=(counts==list(range(count-window,count+1)) and with_scores and score_rows

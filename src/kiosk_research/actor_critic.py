@@ -77,9 +77,12 @@ class ActorCriticPolicy:
                   min(now/max(1,self.hours*60),2.),c.openness,c.budget/100.,*public]
         return torch.tensor(values,dtype=torch.float32).clamp(-10,10)
 
-    def begin_episode(self, store, lam, scenario, n, hours):
+    def begin_episode(self, store, lam, scenario, n, hours, continuing=False):
         self.reference = copy.deepcopy(store)
-        self.pending = None
+        if not continuing:
+            self.pending = None
+            self.transition_discount = 1.
+            self.horizon_start = len(self.daily_batch)
         self.action = None
         self.episode_reward = 0.
 
@@ -112,9 +115,10 @@ class ActorCriticPolicy:
         if self.training and self.kind == 'contextual' and self.pending is not None:
             old_obs,old_action,reward = self.pending
             with torch.no_grad():
-                target = reward + self.critic(obs).item()  # gamma=1, finite day
+                target = reward + getattr(self,'transition_discount',1.) * self.critic(obs).item()
             self._update([(old_obs,old_action,target)])
             self.pending = None
+            self.transition_discount = 1.
         if self.kind == 'fixed' and self.training and self.action is not None:
             weights = self.action.double(); weights /= weights.sum()
             return tuple(float(x) for x in weights)
@@ -136,16 +140,29 @@ class ActorCriticPolicy:
     def feedback(self, reward):
         self.episode_reward += reward
         if self.training and self.kind == 'contextual':
+            if self.pending is not None:
+                reward += self.pending[2]
+                if self.action is None:
+                    self.pending=(self.pending[0],self.pending[1],reward)
+                    return
             self.pending = (self.last_obs,self.action,reward)
 
-    def end_episode(self, reward):
+    def end_episode(self, reward, terminal=True, discount=.99):
         if not self.training:
             return
         if self.kind == 'contextual' and self.pending is not None:
-            self._update([self.pending])  # terminal V=0
-            self.pending = None
-        elif self.kind == 'fixed' and self.action is not None:
-            self.daily_batch.append((self.last_obs,self.action,reward))
+            if terminal:
+                self._update([self.pending])  # V=0 only at the multiday horizon boundary
+                self.pending = None
+            else:self.transition_discount=getattr(self,'transition_discount',1.)*discount
+        elif self.kind == 'fixed':
+            self.daily_batch.append((self.last_obs if self.action is not None else None,self.action,reward))
+        if self.kind=='fixed' and terminal:
+            total=0.
+            for i in range(len(self.daily_batch)-1,getattr(self,'horizon_start',0)-1,-1):
+                obs,action,day_reward=self.daily_batch[i];total=day_reward+discount*total
+                self.daily_batch[i]=(obs,action,total)
+            self.daily_batch[self.horizon_start:]=[s for s in self.daily_batch[self.horizon_start:] if s[0] is not None]
 
     def end_day(self):
         if self.training and self.kind == 'fixed':
