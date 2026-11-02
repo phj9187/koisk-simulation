@@ -81,3 +81,5 @@ PYTHONPATH=src python -m kiosk_research.cli --config config/actor_critic_pilot.y
 새 버전은 구버전 체크포인트를 이어 쓰지 않습니다. 과거 실험은 원래 커밋으로 재개하세요.
 
 가격대·초기 재고·복수 후보 학습·공유 신경망 비교와 수렴 해석: [보완 설명](docs/calibrated_learning_ko.md).
+
+대기 포기·외부 선택·마감·배송 지연·재고 연령 보완: [운영 현실성](docs/operations_realism_ko.md).

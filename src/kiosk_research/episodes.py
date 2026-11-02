@@ -28,7 +28,7 @@ def run_episode(config,case,policy,lam,scenario,episode_id,namespace='experiment
         for menu in template.menus:units[menu.ingredient]+=menu.units/max(1,len(template.menus))
         store.stock={k:math.ceil(expected*settings.expected_purchase_rate*units[k]*settings.inventory_cover_days) for k in template.stock}
     hours=case['features'].get('opening_hours');hours=int(hours) if hours and 1<=hours<=24 else 8
-    inventory=Inventory(store,settings) if horizon>1 else None
+    inventory=Inventory(store,settings,seed_for(config.seed,namespace,'inventory_age',episode_id,case['id'])) if horizon>1 else None
     results=[];logs=[];trust_state={}
     for index in range(horizon):
         calendar=settings.calendar(episode_id,index)
@@ -72,7 +72,7 @@ def run_episode(config,case,policy,lam,scenario,episode_id,namespace='experiment
         logs.extend(dict(event,horizon_day=index+1,calendar_date=calendar.isoformat()) for event in outcome['logs'])
         results.append(outcome)
     out={}
-    totals={'visitors','served','accepted','abandoned','profit','gross_profit','expired_units','inventory_loss','holding_cost','purchase_cost','ordered_units'}
+    totals={'visitors','served','accepted','abandoned','profit','gross_profit','expired_units','inventory_loss','holding_cost','purchase_cost','ordered_units','outside_option_customers','closed_customers','kiosk_busy_minutes','overtime_minutes'}
     totals.update(k for k in results[0] if k.startswith('infeasible_'))
     waits={'mean_total_wait','mean_kiosk_wait','mean_decision_time','mean_cook_wait','mean_cook_time','mean_seat_wait'}
     for key,value in results[0].items():

@@ -8,6 +8,14 @@ import random
 
 @dataclass
 class Realism:
+    operational_queue: bool = False
+    enforce_closing: bool = False
+    payment_minutes: float = 0.
+    outside_utility: float | None = None
+    choice_error: str = 'legacy'
+    ingredient_shelf_lives: dict = field(default_factory=dict)
+    delivery_lead_days: int = 1
+    initial_age_mode: str = 'fresh'
     budget_mode: str = 'legacy'
     budget_multiplier_low: float = .75
     budget_multiplier_high: float = 1.8
@@ -58,6 +66,14 @@ class Realism:
 
     def validate(self):
         date.fromisoformat(self.start_date)
+        for key in ('operational_queue','enforce_closing'):
+            if type(getattr(self,key)) is not bool:raise ValueError('invalid '+key)
+        if self.choice_error not in ('legacy','gumbel'):raise ValueError('invalid choice_error')
+        if self.initial_age_mode not in ('fresh','staggered'):raise ValueError('invalid initial_age_mode')
+        if type(self.delivery_lead_days) is not int or not 1<=self.delivery_lead_days<=30:raise ValueError('invalid delivery lead')
+        if not math.isfinite(self.payment_minutes) or self.payment_minutes<0:raise ValueError('invalid payment time')
+        if self.outside_utility is not None and not math.isfinite(self.outside_utility):raise ValueError('invalid outside utility')
+        if not isinstance(self.ingredient_shelf_lives,dict) or any(type(v) is not int or not 1<=v<=30 for v in self.ingredient_shelf_lives.values()):raise ValueError('invalid ingredient shelf lives')
         if self.budget_mode not in ('legacy','price_relative'):raise ValueError('invalid budget_mode')
         if self.inventory_mode not in ('legacy','demand'):raise ValueError('invalid inventory_mode')
         if not 0<self.budget_multiplier_low<=self.budget_multiplier_high or not math.isfinite(self.budget_multiplier_high):raise ValueError('invalid budget range')
@@ -121,20 +137,29 @@ class Inventory:
     A finite multiday episode is the statistical unit. Inventory is reset only at
     episode boundaries, identically in all arms, and carried inside the episode.
     """
-    def __init__(self, store, settings):
+    def __init__(self, store, settings, seed=42):
         self.settings=settings;self.base=dict(store.stock);self.costs=ingredient_costs(store)
         self.cohorts={k:[(v,0)] for k,v in store.stock.items()}
+        if settings.initial_age_mode=='staggered':
+            for k,quantity in self.base.items():
+                rng=random.Random(str((seed,k,'initial_age')));life=settings.ingredient_shelf_lives.get(k,settings.shelf_life_days)
+                ages=[0]*life
+                for _ in range(quantity):ages[rng.randrange(life)]+=1
+                self.cohorts[k]=[(n,a) for a,n in reversed(list(enumerate(ages))) if n]
         self.pending={k:0 for k in self.base}
+        self.pipeline={k:[] for k in self.base};self.day=-1
 
     def morning(self, store, seed):
         from dataclasses import replace
-        shop=copy.deepcopy(store);rng=random.Random(seed);purchase=0.
+        shop=copy.deepcopy(store);rng=random.Random(seed);purchase=0.;self.day+=1
         for k in self.base:
-            delivered=sum(rng.random()<self.settings.delivery_fill_rate for _ in range(self.pending[k]))
+            due=sum(q for day,q in self.pipeline[k] if day<=self.day)
+            self.pipeline[k]=[(day,q) for day,q in self.pipeline[k] if day>self.day]
+            delivered=sum(rng.random()<self.settings.delivery_fill_rate for _ in range(due))
             if delivered:self.cohorts[k].append((delivered,0))
             purchase+=delivered*self.costs[k]
         shop.stock={k:sum(v for v,age in rows) for k,rows in self.cohorts.items()}
-        urgency={k:max((age/self.settings.shelf_life_days for quantity,age in rows if quantity),default=0.) for k,rows in self.cohorts.items()}
+        urgency={k:max((age/self.settings.ingredient_shelf_lives.get(k,self.settings.shelf_life_days) for quantity,age in rows if quantity),default=0.) for k,rows in self.cohorts.items()}
         shop.menus=[replace(m,expiry_risk=max(m.expiry_risk,urgency.get(m.ingredient,0.))) for m in shop.menus]
         shop.cook_free_at=[0.]*shop.cooks
         return shop,purchase
@@ -145,11 +170,13 @@ class Inventory:
             used=initial[k]-terminal[k];kept=[]
             for quantity,age in rows:
                 consumed=min(quantity,used);used-=consumed;quantity-=consumed
-                if age+1>=self.settings.shelf_life_days:
+                if age+1>=self.settings.ingredient_shelf_lives.get(k,self.settings.shelf_life_days):
                     discarded+=quantity;waste+=quantity*(self.costs[k]+self.settings.disposal_cost_per_unit)
                 elif quantity:kept.append((quantity,age+1))
             self.cohorts[k]=kept
             left=sum(v for v,age in kept);holding+=left*self.settings.holding_cost_per_unit
-            self.pending[k]=max(0,math.ceil(self.base[k]*self.settings.reorder_target)-left)
+            in_transit=sum(q for day,q in self.pipeline[k])
+            self.pending[k]=max(0,math.ceil(self.base[k]*self.settings.reorder_target)-left-in_transit)
+            if self.pending[k]:self.pipeline[k].append((self.day+self.settings.delivery_lead_days,self.pending[k]))
         return {'expired_units':discarded,'inventory_loss':waste,'holding_cost':holding,
                 'ordered_units':sum(self.pending.values()),'carried_units':sum(v for rows in self.cohorts.values() for v,age in rows)}

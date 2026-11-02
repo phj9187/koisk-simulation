@@ -30,6 +30,7 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
         events.append((arrival,c,shocks,rng.random(),customer_id,patience,cook_factors,local.random()<settings.dine_in_fraction))
     events.sort(key=lambda e:e[0])
     served=accepted=abandoned=0;taste=price=waiting=profit=wait_total=0.;kiosk_free=0.;logs=[];weight_sum=[0.]*len(COMPONENTS)
+    outside=closed=0;kiosk_busy=0.;last_finish=0.
     kiosk_total=decision_total=cook_queue_total=cook_total=seat_total=0.
     fatigue_total=inspected_total=0.
     infeasible=0;feasibility_failures={'stock':0,'budget':0,'allergy':0,'combined':0}
@@ -57,6 +58,10 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
             abandoned+=1
             if raw:logs.append({'event':customer_id,'served':False,'arrival':arrival,'reason':'kiosk_wait_abandonment'})
             continue
+        if settings.enforce_closing and now>=hours*60.:
+            closed+=1
+            if raw:logs.append({'event':customer_id,'served':False,'arrival':arrival,'reason':'ordering_closed'})
+            continue
         common_decision=(1.3+.45*len(options))*settings.decision_multiplier
         person_key=customer_keys[customer_id] if customer_keys is not None else 'new:'+str(customer_id)
         regular=person_key.startswith('regular:')
@@ -67,6 +72,7 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
         w=(0.,)*len(COMPONENTS) if no_recommendation else policy.weights(c,store,now,lam)
         predicted_decision=common_decision if decision_time_mode=='equal' else .8+.10*len(options)
         if settings.decision_rule=='inspected':predicted_decision=(settings.decision_base+settings.decision_per_item*(1+settings.recommendation_count))*settings.decision_multiplier
+        predicted_decision+=settings.payment_minutes
         def recommendation_score(menu):
             features=list(recommendation_features(c,store,menu,arrival,now,wait_scale,risks,risk_scale,max_margin,predicted_decision))
             features[0]=customer_model.perceived_taste(menu,ai=True)
@@ -77,16 +83,32 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
         own,suggestion,picked=choice['own'],choice['suggestion'],choice['picked']
         took,probability=choice['accepted'],choice['probability']
         decision=customer_model.decision_minutes(choice,no_recommendation,decision_time_mode)
+        if settings.operational_queue:
+            kiosk_free=now+decision;kiosk_busy+=decision
+        if customer_model.prefers_outside(picked):
+            outside+=1
+            if hasattr(policy,'feedback'):policy.feedback(0.)
+            if raw:logs.append({'event':customer_id,'served':False,'arrival':arrival,'reason':'outside_option','decision_minutes':decision,'decision_end':now+decision})
+            continue
+        decision+=settings.payment_minutes
+        if settings.operational_queue:
+            kiosk_free=now+decision;kiosk_busy+=settings.payment_minutes
+        if settings.enforce_closing and now+decision>hours*60.:
+            closed+=1
+            if hasattr(policy,'feedback'):policy.feedback(0.)
+            if raw:logs.append({'event':customer_id,'served':False,'arrival':arrival,'reason':'ordering_closed_after_decision','decision_minutes':decision})
+            continue
         perceived_wait_at_choice=customer_model.perceived_wait(picked)
         if now-arrival+decision+customer_model.perceived_wait(picked,now+decision)>patience:
             abandoned+=1
             if hasattr(policy,'feedback'):policy.feedback(0.)
-            if raw:logs.append({'event':customer_id,'served':False,'arrival':arrival,'recommended':suggestion.name if suggestion else None,'reason':'predicted_wait_abandonment'})
+            if raw:logs.append({'event':customer_id,'served':False,'arrival':arrival,'recommended':suggestion.name if suggestion else None,'reason':'predicted_wait_abandonment','decision_minutes':decision,'decision_end':now+decision})
             continue
         order=now+decision;kiosk_free=order
         cook=min(range(store.cooks),key=lambda k:store.cook_free_at[k])
         cook_start=max(order,store.cook_free_at[cook]);cook_minutes=picked.cook_minutes*cook_factors[picked.name]
         finish=cook_start+cook_minutes
+        last_finish=max(last_finish,finish)
         store.cook_free_at[cook]=finish;store.stock[picked.ingredient]-=picked.units
         if seat is not None:seat_free[seat]=finish+settings.table_minutes
         wait=finish-arrival;fit=affinity(c,picked);affordable=affordability(picked.price,c.budget);wait_value=wait_utility(wait,wait_scale)
@@ -111,7 +133,7 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
                             'acceptance_reference':choice['acceptance_reference'],'perceived_fit':customer_model.perceived_taste(picked),
                             'ai_predicted_fit':customer_model.perceived_taste(picked,ai=True),'perceived_wait':perceived_wait_at_choice,
                             'choice_fatigue':customer_model.fatigue(choice),'trust_before':trust,'trust_after':trust_state.get(person_key,trust),
-                            'total_wait':wait,'seat_wait':seat_entry-arrival,'kiosk_wait':now-seat_entry,'cook_wait':cook_start-order,'cook_minutes':cook_minutes,
+                            'order_time':order,'finish_time':finish,'total_wait':wait,'seat_wait':seat_entry-arrival,'kiosk_wait':now-seat_entry,'cook_wait':cook_start-order,'cook_minutes':cook_minutes,
                             'stock_after':dict(store.stock),'weights':list(w)})
     risk=risks
     initial_risk=sum(risk[k]*v for k,v in initial.items());leftover=sum(risk[k]*v for k,v in store.stock.items())
@@ -138,6 +160,8 @@ def simulate(people,original,policy,lam,scenario,seed,wait_scale=25.,hours=8,raw
             'mean_total_wait':wait_total/max(1,served),'leftover_units':sum(store.stock.values()),'weighted_leftover':leftover,
             'risk_reduction_applicable':bool(initial_risk>0),'served_fraction':served/max(1,n),
             'accepted':accepted,'abandoned':abandoned,'gross_profit':gross_profit,**inventory_metrics,
+            'outside_option_customers':outside,'closed_customers':closed,'kiosk_busy_minutes':kiosk_busy,
+            'overtime_minutes':max(0.,last_finish-hours*60.),
             'infeasible_customers':infeasible,**{'infeasible_rescue_'+k:v for k,v in feasibility_failures.items()},
             'mean_kiosk_wait':kiosk_total/max(1,served),'mean_decision_time':decision_total/max(1,served),
             'mean_seat_wait':seat_total/max(1,served),

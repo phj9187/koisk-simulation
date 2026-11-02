@@ -76,7 +76,15 @@ class CustomerDecision:
         return 2.5*self.perceived_taste(menu)-c.price_sensitivity*menu.price/20.-c.wait_sensitivity*self.perceived_wait(menu)/30.
 
     def noisy_utility(self,menu):
-        return self.utility(menu)+self.settings.choice_noise*math.log(max(1e-9,self.shocks[menu.name]))
+        error=math.log(max(1e-9,self.shocks[menu.name]))
+        if self.settings.choice_error=='gumbel':error=-error
+        return self.utility(menu)+self.settings.choice_noise*error
+
+    def prefers_outside(self,menu):
+        if self.settings.outside_utility is None:return False
+        rng=keyed_rng(self.seed,self.person,'outside_choice')
+        error=-math.log(max(1e-12,-math.log(max(1e-12,rng.random()))))
+        return self.settings.outside_utility+self.settings.choice_noise*error>self.noisy_utility(menu)
 
     def choose(self,suggestions,u):
         own=max(self.considered,key=self.noisy_utility)

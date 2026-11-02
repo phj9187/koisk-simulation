@@ -1,0 +1,102 @@
+algorithm: actor_critic
+auto_cleanup: false
+checkpoint_every: 1
+checkpoint_keep: 2
+cross_evaluation: {}
+decision_time_mode: equal
+diagnostics: true
+evaluation_days: 1
+evaluation_lambdas:
+- 0.0
+- 0.125
+- 0.25
+- 0.375
+- 0.5
+- 0.625
+- 0.75
+- 0.875
+- 1.0
+global_probe_every: 5
+lambda_search: pareto_two_stage
+learning:
+  actor_lr: 0.0003
+  advantage_scale: 1.0
+  critic_lr: 0.001
+  fixed_candidates: 8
+  initial_alpha: 10.0
+  normalize_advantage: true
+  paired_baseline: true
+models:
+- no_recommendation
+- fixed
+- contextual
+plots: true
+raw_logs: true
+realism:
+  ai_taste_noise: 0.25
+  budget_mode: price_relative
+  budget_multiplier_high: 1.8
+  budget_multiplier_low: 0.75
+  choice_error: gumbel
+  consideration_mean: 3.0
+  cook_time_cv: 0.2
+  decision_base: 0.8
+  decision_per_item: 0.25
+  decision_rule: inspected
+  delivery_fill_rate: 0.95
+  demand_cv: 0.2
+  discount: 0.99
+  disposal_cost_per_unit: 0.05
+  enforce_closing: true
+  expected_purchase_rate: 0.7
+  holding_cost_per_unit: 0.02
+  initial_age_mode: staggered
+  inventory_cover_days: 1.1
+  inventory_horizon_days: 7
+  inventory_mode: demand
+  operational_queue: true
+  overload_penalty: 0.0
+  patience_minutes: 20.0
+  payment_minutes: 0.3
+  population_path: /content/drive/MyDrive/AI-Kiosk-Data/raw_data/realism_20261030/population_hourly.csv
+  population_strength: 0.3
+  recommendation_count: 2
+  regular_taste_noise: 0.1
+  reorder_target: 1.0
+  repeat_fraction: 0.15
+  shelf_life_days: 3
+  start_date: '2026-01-05'
+  taste_noise: 0.25
+  trust_learning: false
+  wait_visibility: menu_only
+repetition_seeds: true
+repetitions: 1
+sales_profile_path: /content/drive/MyDrive/AI-Kiosk-Data/raw_data/realism_20261030/seoul_sales.csv
+sales_quarter: ''
+scenarios:
+  balanced:
+    customer:
+    - 0.45
+    - 0.25
+    - 0.3
+    store:
+    - 0.75
+    - 0.25
+seed: 42
+sigma: 0.5
+source: empirical
+stores: 8
+survey_path: /content/drive/MyDrive/AI-Kiosk-Data/raw_data/realism_20261030/source_2025.xlsx
+train_days: 2
+train_lambdas: 3
+validation_days: 1
+validation_lambdas:
+- 0.0
+- 0.25
+- 0.5
+- 0.75
+- 1.0
+visitor_variation: poisson
+visitors: null
+wait_scale: 25.0
+workers: 1
