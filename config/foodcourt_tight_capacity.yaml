@@ -1,0 +1,14 @@
+menu_counts: [12, 32, 64]
+attention_modes: [bounded, full]
+visitors: [300, 600]
+repetitions: 20
+generations: 100
+population: 8
+train_days: 2
+validation_days: 10
+evaluation_days: 30
+validation_every: 5
+workers: 2
+
+servers_per_counter: 1
+seats: 100
