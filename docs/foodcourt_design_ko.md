@@ -58,3 +58,5 @@ python -m kiosk_foodcourt.cli --config config/foodcourt_colab.yaml --root /conte
 - [순천대 공식 대학신문 2022 기사](https://www.scnu.ac.kr/press/na/ntt/selectNttInfo.do?nttSn=281108131): 당시 키오스크 2대와 주문 흐름 참고. 현재 인력 배치라고 간주하지 않는다.
 - [경희대 2026 대학원 안내](https://gsp.khu.ac.kr/upload/contents/202603/202603120235367360.pdf): 앱·키오스크 채널의 실제 존재 확인. 이번 버전은 키오스크 채널만 구현.
 - [Colab 공식 FAQ](https://research.google.com/colaboratory/faq.html): 실행 자원·연결 제한 확인.
+
+[실행 검증과 실패 조건 기록](foodcourt_validation_ko.md)
