@@ -23,6 +23,7 @@ def run_job(args):
  settings, root, task, deadline=args; s=Settings(**settings).validate(); rep,menus,attention,visitors=task
  folder=Path(root)/'jobs'/f'r{rep}_m{menus}_{attention}_v{visitors}'; folder.mkdir(parents=True,exist_ok=True)
  if (folder/'result.json').exists():return str(folder)
+ if time.monotonic()>=deadline:return str(folder)
  lock=folder/'worker.lock'
  try: fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY)
  except FileExistsError: raise RuntimeError(f'Job already locked: {lock}. Confirm no worker is active before removing this lock.')

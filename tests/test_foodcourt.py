@@ -38,7 +38,7 @@ class FoodcourtTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as a,tempfile.TemporaryDirectory() as b:
    task=(0,12,'bounded',20)
    from unittest.mock import patch
-   with patch('kiosk_foodcourt.cli.time.monotonic',side_effect=[0,2]):
+   with patch('kiosk_foodcourt.cli.time.monotonic',side_effect=[0,0,2]):
     run_job((s.to_dict(),a,task,1))
    saved=json.loads(next(Path(a).rglob('checkpoint.json')).read_text())
    self.assertEqual(saved['generation'],1)
@@ -47,6 +47,12 @@ class FoodcourtTests(unittest.TestCase):
    x=json.loads(pa.read_text(encoding='utf-8'));y=json.loads(pb.read_text(encoding='utf-8'))
    self.assertEqual(x,y)
    calls=[v['calls'] for v in x['training']['models'].values()];self.assertEqual(calls,[6,6])
+ def test_expired_jobs_do_not_start_validation(self):
+  from unittest.mock import patch
+  import time
+  with tempfile.TemporaryDirectory() as root,patch('kiosk_foodcourt.cli.simulate',side_effect=AssertionError('expired job executed')):
+   run_job((Settings().to_dict(),root,(0,12,'bounded',20),time.monotonic()-1))
+   self.assertFalse(list(Path(root).rglob('checkpoint.json')))
  def test_signature_changes_with_scientific_setting(self):
   self.assertNotEqual(signature(Settings()),signature(Settings(openness=.1)))
 
