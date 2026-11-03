@@ -31,5 +31,8 @@
 ## 최종 확인
 - 기존 모형과 새 모형을 포함한 109개 검사: 제한 환경에서 108개 통과, 기존 대시보드의 로컬 HTTP 연결 검사 1개는 연결 제한으로 실패했다. 해당 검사만 로컬 연결 허용 환경에서 재실행하여 통과했다.
 - Colab Python 3에서 같은 pilot 4개 작업을 완료했다. 손님 중심 추천 대비 기본·스트레스·집단별 비교 40행이 로컬 결과와 1e-12 이내로 일치했다.
-- Colab 검증은 /content/foodcourt_results/cloud_validation_20261103 임시 공간에서 수행했으며 Drive 인증·영구 저장은 이 실행에 포함하지 않았다. cloud_comparisons.json과 colab_validation.jpg를 로컬에 보존했다.
-- 알고리즘 코드가 게시된 GitHub commit: 86647c15878d7c45b59fc88674d494c15e4f7a64. 이후 노트북의 출력 표시와 검증 문서만 보완했다.
+- Colab 검증은 /content/foodcourt_results/cloud_validation_final_20261103 임시 공간에서 수행했으며 Drive 인증·영구 저장은 이 실행에 포함하지 않았다. cloud_comparisons.json과 colab_validation.jpg를 로컬에 보존했다.
+- 초기 Colab 검증 버전은 86647c15878d7c45b59fc88674d494c15e4f7a64이며, 최종 실행 코드 버전은 c0bb565db86e19f9c75f682a5582930d716dadee다. 최종 버전은 시간 예산이 끝난 뒤 대기 작업이 검증을 새로 시작하지 않게 한다.
+- 전체 109종 검사 확인 뒤 시간 만료 검사를 추가했고 새 모듈의 6종 검사를 재실행하여 통과했다. 최종 버전으로 로컬 4개 작업을 다시 실행했으며 이전 학습 상태·최종·스트레스 결과가 모두 동일했다.
+
+- 시간 예산 수정이 포함된 c0bb565db86e19f9c75f682a5582930d716dadee를 Colab에서 다시 가져와 새 폴더에서 4개 작업을 완료했다. 최종 버전의 클라우드 비교 40행도 로컬과 일치했다.
